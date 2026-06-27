@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DocuMind — Dashboard</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #0f0f0f;
+      color: #fff;
+      min-height: 100vh;
+    }
+    nav {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 20px 40px;
+      border-bottom: 1px solid #2a2a2a;
+    }
+    nav h1 { font-size: 18px; }
+    nav button {
+      background: transparent;
+      border: 1px solid #2a2a2a;
+      color: #888;
+      padding: 8px 16px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 13px;
+    }
+    nav button:hover { color: #fff; border-color: #555; }
+    .main { padding: 40px; max-width: 900px; margin: 0 auto; }
+    .top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 32px; }
+    .top h2 { font-size: 22px; }
+    .upload-btn {
+      background: #fff;
+      color: #000;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .upload-btn:hover { background: #e0e0e0; }
+    .upload-area {
+      border: 1px dashed #2a2a2a;
+      border-radius: 12px;
+      padding: 32px;
+      text-align: center;
+      margin-bottom: 32px;
+      display: none;
+    }
+    .upload-area.visible { display: block; }
+    .upload-area p { color: #888; font-size: 14px; margin-bottom: 16px; }
+    .upload-area input { display: none; }
+    .upload-area label {
+      background: #1a1a1a;
+      border: 1px solid #2a2a2a;
+      padding: 10px 20px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+    .upload-area label:hover { border-color: #555; }
+    .uploading {
+      color: #888;
+      font-size: 13px;
+      margin-top: 12px;
+      display: none;
+    }
+    .docs-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 16px;
+    }
+    .doc-card {
+      background: #1a1a1a;
+      border: 1px solid #2a2a2a;
+      border-radius: 12px;
+      padding: 20px;
+      cursor: pointer;
+      transition: border-color 0.15s;
+    }
+    .doc-card:hover { border-color: #555; }
+    .doc-icon { font-size: 24px; margin-bottom: 12px; }
+    .doc-name {
+      font-size: 14px;
+      font-weight: 500;
+      margin-bottom: 8px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .doc-summary {
+      font-size: 12px;
+      color: #888;
+      line-height: 1.5;
+      display: -webkit-box;
+      -webkit-line-clamp: 3;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+    .doc-date {
+      font-size: 11px;
+      color: #555;
+      margin-top: 12px;
+    }
+    .empty {
+      text-align: center;
+      color: #555;
+      padding: 60px 0;
+      font-size: 14px;
+    }
+    .error {
+      color: #ff4444;
+      font-size: 13px;
+      margin-top: 10px;
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <nav>
+    <h1>DocuMind</h1>
+    <button onclick="logout()">Logout</button>
+  </nav>
+
+  <div class="main">
+    <div class="top">
+      <h2>Your Documents</h2>
+      <button class="upload-btn" onclick="toggleUpload()">+ Upload</button>
+    </div>
+
+    <div class="upload-area" id="uploadArea">
+      <p>Upload a PDF, DOCX, or TXT file — AI will summarize it instantly</p>
+      <input type="file" id="fileInput" accept=".pdf,.docx,.txt" onchange="uploadFile()">
+      <label for="fileInput">Choose File</label>
+      <div class="uploading" id="uploading">⏳ Uploading and summarizing... this may take a moment</div>
+      <div class="error" id="uploadError"></div>
+    </div>
+
+    <div class="docs-grid" id="docsGrid"></div>
+    <div class="empty" id="empty" style="display:none">No documents yet. Upload your first one above.</div>
+  </div>
+
+  <script>
+    const API = "http://localhost:8000"
+    const token = localStorage.getItem('token')
+
+    if (!token) window.location.href = 'index.html'
+
+    async function loadDocuments() {
+      try {
+        const res = await fetch(`${API}/docs/documents?token=${token}`)
+        const data = await res.json()
+        if (!res.ok) throw new Error(data.detail)
+
+        const grid = document.getElementById('docsGrid')
+        const empty = document.getElementById('empty')
+        grid.innerHTML = ''
+
+        if (data.length === 0) {
+          empty.style.display = 'block'
+          return
+        }
+
+        empty.style.display = 'none'
+        data.forEach(doc => {
+          const card = document.createElement('div')
+          card.className = 'doc-card'
+          card.onclick = () => window.location.href = `document.html?id=${doc.id}`
+          card.innerHTML = `
+            <div class="doc-icon">📄</div>
+            <div class="doc-name">${doc.filename}</div>
+            <div class="doc-summary">${doc.summary || 'No summary available'}</div>
+            <div class="doc-date">${new Date(doc.created_at).toLocaleDateString()}</div>
+          `
+          grid.appendChild(card)
+        })
+      } catch (err) {
+        console.error(err)
+      }
+    }
+
+    function toggleUpload() {
+      const area = document.getElementById('uploadArea')
+      area.classList.toggle('visible')
+    }
+
+    async function uploadFile() {
+      const file = document.getElementById('fileInput').files[0]
+      if (!file) return
+
+      const uploadingEl = document.getElementById('uploading')
+      const errorEl = document.getElementById('uploadError')
+      uploadingEl.style.display = 'block'
+      errorEl.style.display = 'none'
+
+      try {
+        const formData = new FormData()
+        formData.append('file', file)
+
+        const res = await fetch(`${API}/docs/upload?token=${token}`, {
+          method: 'POST',
+          body: formData
+        })
+        const data = await res.json()
+        if (!res.ok) throw new Error(data.detail)
+
+        uploadingEl.style.display = 'none'
+        document.getElementById('uploadArea').classList.remove('visible')
+        loadDocuments()
+      } catch (err) {
+        uploadingEl.style.display = 'none'
+        errorEl.textContent = err.message || 'Upload failed'
+        errorEl.style.display = 'block'
+      }
+    }
+
+    function logout() {
+      localStorage.removeItem('token')
+      window.location.href = 'index.html'
+    }
+
+    loadDocuments()
+  </script>
+</body>
+</html>

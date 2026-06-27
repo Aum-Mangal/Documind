@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DocuMind — Document</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #0f0f0f;
+      color: #fff;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    nav {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 16px 40px;
+      border-bottom: 1px solid #2a2a2a;
+      flex-shrink: 0;
+    }
+    nav h1 { font-size: 18px; }
+    nav a {
+      color: #888;
+      text-decoration: none;
+      font-size: 13px;
+    }
+    nav a:hover { color: #fff; }
+    .layout {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      flex: 1;
+      overflow: hidden;
+    }
+    /* LEFT PANEL */
+    .left {
+      border-right: 1px solid #2a2a2a;
+      overflow-y: auto;
+      padding: 32px;
+    }
+    .filename {
+      font-size: 13px;
+      color: #555;
+      margin-bottom: 6px;
+    }
+    .doc-title {
+      font-size: 20px;
+      font-weight: 600;
+      margin-bottom: 24px;
+    }
+    .section-title {
+      font-size: 11px;
+      font-weight: 600;
+      color: #555;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 10px;
+    }
+    .summary-box {
+      background: #1a1a1a;
+      border: 1px solid #2a2a2a;
+      border-radius: 10px;
+      padding: 16px;
+      font-size: 14px;
+      line-height: 1.7;
+      color: #ccc;
+      margin-bottom: 28px;
+    }
+    .entities-wrap { display: flex; flex-wrap: wrap; gap: 8px; }
+    .entity {
+      font-size: 12px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-weight: 500;
+    }
+    .entity-PERSON { background: #1e3a5f; color: #7eb8f7; }
+    .entity-ORG { background: #1a3a2a; color: #6fcf97; }
+    .entity-DATE { background: #3a2a1a; color: #f2994a; }
+    .entity-GPE { background: #2a1a3a; color: #bb6bd9; }
+    .entity-default { background: #2a2a2a; color: #aaa; }
+    .loading { color: #555; font-size: 14px; }
+
+    /* RIGHT PANEL */
+    .right {
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .chat-header {
+      padding: 20px 24px;
+      border-bottom: 1px solid #2a2a2a;
+      font-size: 14px;
+      font-weight: 500;
+      flex-shrink: 0;
+    }
+    .messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .message { display: flex; gap: 10px; max-width: 85%; }
+    .message.user { align-self: flex-end; flex-direction: row-reverse; }
+    .message.ai { align-self: flex-start; }
+    .bubble {
+      padding: 10px 14px;
+      border-radius: 12px;
+      font-size: 14px;
+      line-height: 1.6;
+    }
+    .message.user .bubble {
+      background: #fff;
+      color: #000;
+      border-radius: 12px 12px 2px 12px;
+    }
+    .message.ai .bubble {
+      background: #1a1a1a;
+      color: #ccc;
+      border: 1px solid #2a2a2a;
+      border-radius: 12px 12px 12px 2px;
+    }
+    .thinking {
+      color: #555;
+      font-size: 13px;
+      font-style: italic;
+      align-self: flex-start;
+      display: none;
+    }
+    .chat-input {
+      display: flex;
+      gap: 10px;
+      padding: 20px 24px;
+      border-top: 1px solid #2a2a2a;
+      flex-shrink: 0;
+    }
+    .chat-input input {
+      flex: 1;
+      padding: 12px 16px;
+      background: #1a1a1a;
+      border: 1px solid #2a2a2a;
+      border-radius: 8px;
+      color: #fff;
+      font-size: 14px;
+    }
+    .chat-input input:focus { outline: none; border-color: #555; }
+    .chat-input button {
+      background: #fff;
+      color: #000;
+      border: none;
+      padding: 12px 20px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .chat-input button:hover { background: #e0e0e0; }
+    .empty-chat {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      color: #555;
+      font-size: 14px;
+      gap: 8px;
+    }
+    .empty-chat span { font-size: 32px; }
+  </style>
+</head>
+<body>
+  <nav>
+    <h1>DocuMind</h1>
+    <a href="dashboard.html">← Back to Dashboard</a>
+  </nav>
+
+  <div class="layout">
+    <!-- LEFT: Summary + Entities -->
+    <div class="left">
+      <div class="filename" id="filename">Loading...</div>
+      <div class="doc-title">Document Overview</div>
+
+      <div class="section-title">AI Summary</div>
+      <div class="summary-box" id="summary">
+        <span class="loading">Loading summary...</span>
+      </div>
+
+      <div class="section-title">Named Entities</div>
+      <div class="entities-wrap" id="entities">
+        <span class="loading">Detecting entities...</span>
+      </div>
+    </div>
+
+    <!-- RIGHT: Chat -->
+    <div class="right">
+      <div class="chat-header">Chat with this document</div>
+
+      <div class="messages" id="messages">
+        <div class="empty-chat">
+          <span>💬</span>
+          Ask anything about this document
+        </div>
+      </div>
+
+      <div class="thinking" id="thinking">DocuMind is thinking...</div>
+
+      <div class="chat-input">
+        <input
+          type="text"
+          id="questionInput"
+          placeholder="Ask a question about this document..."
+          onkeydown="if(event.key==='Enter') sendMessage()"
+        />
+        <button onclick="sendMessage()">Send</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const API = "http://localhost:8000"
+    const token = localStorage.getItem('token')
+    const params = new URLSearchParams(window.location.search)
+    const docId = params.get('id')
+
+    if (!token) window.location.href = 'index.html'
+    if (!docId) window.location.href = 'dashboard.html'
+
+    // Load document summary
+    async function loadDocument() {
+      try {
+        const res = await fetch(`${API}/docs/documents?token=${token}`)
+        const docs = await res.json()
+        const doc = docs.find(d => d.id == docId)
+        if (!doc) return
+
+        document.getElementById('filename').textContent = doc.filename
+        document.getElementById('summary').textContent = doc.summary || 'No summary available'
+      } catch (err) {
+        document.getElementById('summary').textContent = 'Failed to load summary'
+      }
+    }
+
+    // Load entities
+    async function loadEntities() {
+      try {
+        const res = await fetch(`${API}/docs/documents/${docId}/entities?token=${token}`)
+        const data = await res.json()
+        const wrap = document.getElementById('entities')
+        wrap.innerHTML = ''
+
+        if (!data.entities || data.entities.length === 0) {
+          wrap.innerHTML = '<span style="color:#555;font-size:13px">No entities found</span>'
+          return
+        }
+
+        // Remove duplicates
+        const seen = new Set()
+        data.entities.forEach(ent => {
+          if (seen.has(ent.text)) return
+          seen.add(ent.text)
+
+          const badge = document.createElement('span')
+          badge.className = `entity entity-${ent.label} entity-default`
+          badge.textContent = `${ent.text} · ${ent.label}`
+          wrap.appendChild(badge)
+        })
+      } catch (err) {
+        document.getElementById('entities').innerHTML = '<span style="color:#555">Failed to load entities</span>'
+      }
+    }
+
+    // Chat
+    async function sendMessage() {
+      const input = document.getElementById('questionInput')
+      const question = input.value.trim()
+      if (!question) return
+
+      input.value = ''
+
+      const messages = document.getElementById('messages')
+
+      // Clear empty state
+      const emptyChat = messages.querySelector('.empty-chat')
+      if (emptyChat) emptyChat.remove()
+
+      // Add user message
+      messages.innerHTML += `
+        <div class="message user">
+          <div class="bubble">${question}</div>
+        </div>
+      `
+
+      // Show thinking
+      const thinking = document.getElementById('thinking')
+      thinking.style.display = 'block'
+      messages.scrollTop = messages.scrollHeight
+
+      try {
+        const res = await fetch(`${API}/docs/documents/${docId}/chat?token=${token}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ question })
+        })
+        const data = await res.json()
+        thinking.style.display = 'none'
+
+        messages.innerHTML += `
+          <div class="message ai">
+            <div class="bubble">${data.answer}</div>
+          </div>
+        `
+        messages.scrollTop = messages.scrollHeight
+      } catch (err) {
+        thinking.style.display = 'none'
+        messages.innerHTML += `
+          <div class="message ai">
+            <div class="bubble" style="color:#ff4444">Failed to get answer. Try again.</div>
+          </div>
+        `
+      }
+    }
+
+    loadDocument()
+    loadEntities()
+  </script>
+</body>
+</html>
