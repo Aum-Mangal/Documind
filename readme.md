@@ -96,9 +96,9 @@ python -m spacy download en_core_web_sm
 ### Create a `.env` file
 
 ```env
-DATABASE_URL=your_supabase_database_url
-SECRET_KEY=your_secret_key
-GROQ_API_KEY=your_groq_api_key
+DATABASE_URL=your supabase database_url
+SECRET_KEY=your secret key
+GROQ_API_KEY=your groq api key
 ```
 
 ### Run the backend
