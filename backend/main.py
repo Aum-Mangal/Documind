@@ -4,6 +4,8 @@ from database import engine
 import models
 from auth import router as auth_router
 from documents import router as docs_router
+from fastapi.middleware.cors import CORSMiddleware
+
 
 models.Base.metadata.create_all(bind=engine)
 
@@ -11,13 +13,8 @@ app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "https://documind-rust-nu.vercel.app",
-        "http://localhost:5173",
-        "http://localhost:3000",
-        "null"
-    ],
-    allow_credentials=True,
+    allow_origins=["*"],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
