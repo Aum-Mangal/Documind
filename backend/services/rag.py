@@ -1,14 +1,20 @@
-from sentence_transformers import SentenceTransformer
+from fastembed import TextEmbedding
 from groq import Groq
 from dotenv import load_dotenv
-import faiss
 import numpy as np
 import os
 
 load_dotenv()
 
 client = Groq(api_key=os.getenv("GROQ_API_KEY"))
-embedder = SentenceTransformer("all-MiniLM-L6-v2")
+
+_embedder = None
+
+def get_embedder():
+    global _embedder
+    if _embedder is None:
+        _embedder = TextEmbedding(model_name="BAAI/bge-small-en-v1.5")
+    return _embedder
 
 def chunk_text(text: str, chunk_size: int = 500, overlap: int = 50) -> list:
     words = text.split()
@@ -20,26 +26,23 @@ def chunk_text(text: str, chunk_size: int = 500, overlap: int = 50) -> list:
         i += chunk_size - overlap
     return chunks
 
-def build_index(chunks: list):
-    embeddings = embedder.encode(chunks)
-    embeddings = np.array(embeddings).astype("float32")
-    index = faiss.IndexFlatL2(embeddings.shape[1])
-    index.add(embeddings)
-    return index, embeddings
-
 def answer_question(question: str, text: str) -> str:
     chunks = chunk_text(text)
     if not chunks:
         return "Document is empty."
 
-    index, _ = build_index(chunks)
+    embedder = get_embedder()
+    chunk_embeddings = np.array(list(embedder.embed(chunks)), dtype=np.float32)
+    question_embedding = np.array(list(embedder.embed([question]))[0], dtype=np.float32)
 
-    question_embedding = embedder.encode([question])
-    question_embedding = np.array(question_embedding).astype("float32")
+    q_norm = question_embedding / (np.linalg.norm(question_embedding) + 1e-8)
+    c_norms = chunk_embeddings / (np.linalg.norm(chunk_embeddings, axis=1, keepdims=True) + 1e-8)
 
+    scores = np.dot(c_norms, q_norm)
     k = min(3, len(chunks))
-    distances, indices = index.search(question_embedding, k)
-    relevant_chunks = [chunks[i] for i in indices[0]]
+    top_indices = np.argsort(scores)[::-1][:k]
+    relevant_chunks = [chunks[i] for i in top_indices]
+
     context = "\n\n".join(relevant_chunks)
 
     response = client.chat.completions.create(

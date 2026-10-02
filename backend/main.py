@@ -4,12 +4,14 @@ from database import engine
 import models
 from auth import router as auth_router
 from documents import router as docs_router
-from fastapi.middleware.cors import CORSMiddleware
 
+try:
+    models.Base.metadata.create_all(bind=engine)
+except Exception as e:
+    print(f"[WARNING] Could not connect to database on startup: {e}")
+    print("[WARNING] Server will still start — DB may be available later.")
 
-models.Base.metadata.create_all(bind=engine)
-
-app = FastAPI()
+app = FastAPI(title="DocuMind API", description="Document Intelligence Backend")
 
 app.add_middleware(
     CORSMiddleware,
@@ -21,6 +23,10 @@ app.add_middleware(
 
 app.include_router(auth_router, prefix="/auth", tags=["Auth"])
 app.include_router(docs_router, prefix="/docs", tags=["Documents"])
+
+@app.get("/")
+def root():
+    return {"status": "ok", "message": "DocuMind API is running", "docs": "/docs"}
 
 @app.get("/health")
 def health_check():
