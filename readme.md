@@ -113,7 +113,7 @@ Open `frontend/index.html` in your browser, or serve it with any static file ser
 
 ---
 
-## Deploying to Render (Free Tier)
+## Deploying to Render
 
 DocuMind is optimized with **FastEmbed ONNX runtime** to run under **220 MB RAM**, fitting easily inside Render's **512 MB Free Web Service** tier.
 
