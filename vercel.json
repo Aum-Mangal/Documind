@@ -1,8 +1,0 @@
-﻿{
-  "outputDirectory": "frontend",
-  "rewrites": [
-    { "source": "/", "destination": "/index.html" },
-    { "source": "/dashboard", "destination": "/dashboard.html" },
-    { "source": "/document", "destination": "/document.html" }
-  ]
-}
