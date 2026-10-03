@@ -1,6 +1,25 @@
-# Created by venv; see https://docs.python.org/3/library/venv.html
+# Environments & secrets
+.env
 backend/.env
+venv/
 backend/venv/
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+
+# Python caches
+__pycache__/
 backend/__pycache__/
 backend/services/__pycache__/
 *.pyc
+
+# Node & Frontend dependencies
+node_modules/
+frontend/node_modules/
+npm-debug.log*
+
+# System
+.DS_Store
+Thumbs.db
