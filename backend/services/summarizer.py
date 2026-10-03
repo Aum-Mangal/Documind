@@ -5,6 +5,7 @@ import os
 load_dotenv()
 
 client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+GROQ_MODEL = os.getenv("GROQ_MODEL", "openai/gpt-oss-20b")
 
 def summarize(text: str) -> str:
     if len(text) > 3000:
@@ -14,7 +15,7 @@ def summarize(text: str) -> str:
         return "Document too short to summarize."
 
     response = client.chat.completions.create(
-        model="llama-3.1-8b-instant",
+        model=GROQ_MODEL,
         messages=[
             {
                 "role": "system",
