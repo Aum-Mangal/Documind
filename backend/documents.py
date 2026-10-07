@@ -4,11 +4,12 @@ from database import get_db
 from models import Document, User
 from auth import SECRET_KEY, ALGORITHM
 from jose import jwt, JWTError
-import fitz  # PyMuPDF
 from docx import Document as DocxDocument
 from services.summarizer import summarize
 from services.ner import extract_entities
 from services.rag import answer_question
+from services.ocr import extract_text_from_pdf, extract_text_from_image
+from services.graph import generate_document_graph, generate_global_graph
 from pydantic import BaseModel
 import io
 
@@ -26,24 +27,25 @@ def get_current_user(token: str, db: Session):
     except JWTError:
         raise HTTPException(status_code=401, detail="Invalid token")
 
-# ── Extract text from file ───────────────────────────
+# ── Extract text from file (with OCR) ─────────────────
 def extract_text(file_bytes: bytes, filename: str) -> str:
-    if filename.endswith(".pdf"):
-        pdf = fitz.open(stream=file_bytes, filetype="pdf")
-        text = ""
-        for page in pdf:
-            text += page.get_text()
-        return text
+    filename_lower = filename.lower()
+    
+    if filename_lower.endswith(".pdf"):
+        return extract_text_from_pdf(file_bytes)
 
-    elif filename.endswith(".docx"):
+    elif filename_lower.endswith((".png", ".jpg", ".jpeg", ".webp")):
+        return extract_text_from_image(file_bytes)
+
+    elif filename_lower.endswith(".docx"):
         docx = DocxDocument(io.BytesIO(file_bytes))
         return "\n".join([para.text for para in docx.paragraphs])
 
-    elif filename.endswith(".txt"):
-        return file_bytes.decode("utf-8")
+    elif filename_lower.endswith(".txt"):
+        return file_bytes.decode("utf-8", errors="replace")
 
     else:
-        raise HTTPException(status_code=400, detail="Only PDF, DOCX, and TXT files supported")
+        raise HTTPException(status_code=400, detail="Supported formats: PDF, DOCX, TXT, PNG, JPG, JPEG")
 
 # ── Routes ───────────────────────────────────────────
 @router.post("/upload")
@@ -89,10 +91,10 @@ def get_documents(token: str, db: Session = Depends(get_db)):
         }
         for d in docs
     ]
+
 @router.get("/documents/{doc_id}/entities")
 def get_entities(doc_id: int, token: str, db: Session = Depends(get_db)):
     user = get_current_user(token, db)
-    
     doc = db.query(Document).filter(
         Document.id == doc_id,
         Document.user_id == user.id
@@ -101,12 +103,32 @@ def get_entities(doc_id: int, token: str, db: Session = Depends(get_db)):
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
     
-    entities = extract_entities(doc.raw_text)
+    entities = extract_entities(doc.raw_text or "")
     return {
         "document_id": doc_id,
         "filename": doc.filename,
         "entities": entities
     }
+
+@router.get("/documents/{doc_id}/graph")
+def get_document_graph_endpoint(doc_id: int, token: str, db: Session = Depends(get_db)):
+    user = get_current_user(token, db)
+    doc = db.query(Document).filter(
+        Document.id == doc_id,
+        Document.user_id == user.id
+    ).first()
+
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    return generate_document_graph(doc.raw_text or "")
+
+@router.get("/graph/global")
+def get_global_graph_endpoint(token: str, db: Session = Depends(get_db)):
+    user = get_current_user(token, db)
+    docs = db.query(Document).filter(Document.user_id == user.id).all()
+    return generate_global_graph(docs)
+
 class ChatRequest(BaseModel):
     question: str
 
@@ -130,9 +152,11 @@ def chat_with_document(
     if not doc.raw_text:
         raise HTTPException(status_code=400, detail="Document has no text")
 
-    answer = answer_question(request.question, doc.raw_text)
+    rag_result = answer_question(request.question, doc.raw_text)
     return {
         "document_id": doc_id,
         "question": request.question,
-        "answer": answer
+        "answer": rag_result.get("answer", ""),
+        "sources": rag_result.get("sources", []),
+        "confidence": rag_result.get("confidence", 85)
     }
