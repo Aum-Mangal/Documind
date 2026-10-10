@@ -305,12 +305,21 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ question })
         })
-        const data = await res.json()
+        let data
+        try {
+          data = await res.json()
+        } catch (_) {
+          data = { detail: `Server error (${res.status})` }
+        }
         thinking.style.display = 'none'
+
+        if (!res.ok) {
+          throw new Error(data.detail || data.message || 'Failed to get answer')
+        }
 
         messages.innerHTML += `
           <div class="message ai">
-            <div class="bubble">${data.answer}</div>
+            <div class="bubble">${data.answer || 'No answer generated.'}</div>
           </div>
         `
         messages.scrollTop = messages.scrollHeight
@@ -318,7 +327,7 @@
         thinking.style.display = 'none'
         messages.innerHTML += `
           <div class="message ai">
-            <div class="bubble" style="color:#ff4444">Failed to get answer. Try again.</div>
+            <div class="bubble" style="color:#ff4444">${err.message || 'Failed to get answer. Try again.'}</div>
           </div>
         `
       }
