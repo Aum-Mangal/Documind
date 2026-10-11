@@ -1,4 +1,4 @@
-﻿# DocuMind
+# DocuMind
 
 DocuMind is an AI-powered document intelligence platform that allows users to upload documents, generate concise summaries, extract important information, and ask questions about the document using natural language.
 
@@ -6,170 +6,108 @@ The project was built to explore how modern AI applications combine large langua
 
 ## Features
 
-* User authentication using JWT
-* Upload PDF, DOCX, and TXT documents
-* AI-generated document summaries using Groq Llama 3.1
-* Named Entity Recognition (NER) for extracting people, organizations, dates, and locations
-* Chat with uploaded documents using Retrieval-Augmented Generation (RAG)
-* Personal dashboard to manage uploaded documents
+* **Interactive Knowledge Graph**: Document-level and global multi-document entity co-occurrence networks powered by Cytoscape.js
+* **OCR Support**: Automatic PyMuPDF extraction with Tesseract OCR engine fallback for scanned documents and image files (`.pdf`, `.png`, `.jpg`, `.jpeg`, `.docx`, `.txt`)
+* **Upgraded RAG Pipeline**: Sliding-window chunking (500 words with 100-word overlap), exact cited source snippets, and response confidence scoring
+* **Modern React Frontend**: Clean, dark-themed UI built with React 18, Vite, Tailwind CSS, and Lucide icons
+* **Zero-Config Database**: Seamless local SQLite fallback (`sqlite:///./documind.db`) alongside optional PostgreSQL / Supabase
+* **User Authentication**: Secure JWT-based registration and token persistence
 
 ## Tech Stack
 
 ### Frontend
-
-* HTML
-* CSS
-* JavaScript
+* **React 18** (Vite build system)
+* **Tailwind CSS** (Dark mode styling)
+* **Cytoscape.js** (Interactive graph visualization)
+* **Lucide React** (Modern iconography)
 
 ### Backend
-
-* Python
-* FastAPI
-* SQLAlchemy
-* PostgreSQL (Supabase)
-* JWT Authentication
-
-### AI & Machine Learning
-
-* Groq API
-* Llama 3.1
-* FastEmbed (ONNX Runtime — CPU Optimized)
-* spaCy
-
-### Deployment
-
-* Render (Free Web Service) — Backend
-* Vercel — Frontend
-* Supabase — Database
+* **Python 3.11** / **FastAPI**
+* **SQLAlchemy** (SQLite & PostgreSQL support)
+* **Tesseract OCR** & **PyMuPDF (fitz)**
+* **FastEmbed ONNX** (`BAAI/bge-small-en-v1.5`, CPU-optimized)
+* **Groq API** (`llama-3.3-70b-versatile`)
+* **spaCy** (`en_core_web_sm` NER)
 
 ## Architecture
 
 ```text
-                 Browser
+       React + Vite Frontend (Tailwind + Cytoscape.js)
+                             |
+                      REST / JSON API
+                             |
+                      FastAPI Backend
+       ______________________|______________________
+      |              |               |              |
+  PyMuPDF &       spaCy NER       FastEmbed     SQLite /
+  Tesseract    Entity Extraction    (ONNX)     PostgreSQL
+     OCR             |               |              |
+      |       Knowledge Graph     Cosine       Persistent
+ Document      Co-occurrence    Similarity      Storage
+ Parsing          Matrix        Search Engine
+      |______________________________|
                      |
-                     |
-         HTML / CSS / JavaScript
-                     |
-                     |
-               FastAPI Backend
-                     |
-     ------------------------------------
-     |                |                 |
-     |                |                 |
- Groq Llama 3.1     spaCy NER      PostgreSQL
-                                      |
-                                      |
-                                   Supabase
-                     |
-                     |
-                 FastEmbed (ONNX)
-                     |
-                     |
-             NumPy Similarity
+         Groq LLM (RAG with Citations)
 ```
 
 ## Running Locally
 
-### Clone the repository
+### 1. Clone the repository
 
 ```bash
-git clone https://github.com/Aum-Mangal/documind.git
-cd documind
+git clone https://github.com/Aum-Mangal/Documind.git
+cd Documind
 ```
 
-### Backend Setup
+### 2. Backend Setup
 
 ```bash
 cd backend
-
 python -m venv venv
 
 # Windows
 .\venv\Scripts\Activate.ps1
+# Linux / macOS
+source venv/bin/activate
 
 pip install -r requirements.txt
 ```
 
-### Create a `.env` file inside the `backend/` folder
+### 3. Environment Variables
+
+Create a `.env` file in the root or `backend/` folder:
 
 ```env
-DATABASE_URL=your_supabase_database_url
+# Optional: defaults to local SQLite (sqlite:///./documind.db) if omitted
+DATABASE_URL=sqlite:///./documind.db
 SECRET_KEY=your_secret_key
 GROQ_API_KEY=your_groq_api_key
 ```
 
-### Run the backend
+### 4. Run the Full Application
+
+FastAPI directly serves the compiled React SPA:
 
 ```bash
 uvicorn main:app --reload
 ```
 
-The backend will start at `http://127.0.0.1:8000`.  
-Swagger docs available at `http://127.0.0.1:8000/docs`.
+Open `http://127.0.0.1:8000` in your browser.
 
-### Run the frontend
-
-Open `frontend/index.html` in your browser, or serve it with any static file server.
-
----
-
-## Deploying to Render
-
-DocuMind is optimized with **FastEmbed ONNX runtime** to run under **220 MB RAM**, fitting easily inside Render's **512 MB Free Web Service** tier.
-
-### 1. Connect GitHub Repository to Render
-
-1. Go to [render.com](https://render.com) and log in.
-2. Click **New +** → **Web Service**.
-3. Connect your `documind` GitHub repository.
-
-### 2. Configure Service Settings
-
-* **Name**: `documind-backend`
-* **Environment**: `Python 3`
-* **Build Command**: `pip install -r backend/requirements.txt`
-* **Start Command**: `cd backend && uvicorn main:app --host 0.0.0.0 --port $PORT`
-
-### 3. Add Environment Variables
-
-Under **Environment Variables**, add:
-
-| Key            | Value                        |
-|----------------|------------------------------|
-| `DATABASE_URL` | Your Supabase connection URL |
-| `SECRET_KEY`   | Your JWT secret key          |
-| `GROQ_API_KEY` | Your Groq API key            |
-
-Click **Create Web Service**. Render will deploy your backend!
-
-### 4. Update the Frontend API URL
-
-Once deployed, copy your Render URL (e.g., `https://documind-backend.onrender.com`).  
-Open [`frontend/config.js`](file:///c:/Users/Saran/documind/frontend/config.js) and update `DEFAULT_API_URL`:
-
-```js
-const DEFAULT_API_URL = "https://documind-backend.onrender.com";
-```
+*(For frontend development with hot-reloading: `cd frontend && npm install && npm run dev`)*
 
 ---
 
 ## API Endpoints
 
-| Method | Endpoint                        | Description                      |
-| ------ | ------------------------------- | -------------------------------- |
-| GET    | `/`                             | Health check / API root          |
-| GET    | `/health`                       | Health probe                     |
-| POST   | `/auth/signup`                  | Register a new user              |
-| POST   | `/auth/login`                   | Authenticate a user              |
-| POST   | `/docs/upload`                  | Upload a document                |
-| GET    | `/docs/documents`               | Retrieve uploaded documents      |
-| GET    | `/docs/documents/{id}/entities` | Extract entities from a document |
-| POST   | `/docs/documents/{id}/chat`     | Ask questions about a document   |
-
-## Future Improvements
-
-* OCR support for scanned PDFs
-* Multi-document conversations
-* Semantic search across all uploaded documents
-* Document sharing
-* Better frontend interface
+| Method | Endpoint                        | Description                              |
+| ------ | ------------------------------- | ---------------------------------------- |
+| GET    | `/`                             | Serves React Single Page Application     |
+| GET    | `/health`                       | Health & readiness check                 |
+| POST   | `/auth/signup`                  | Register a new account                   |
+| POST   | `/auth/login`                   | Authenticate and obtain JWT token        |
+| POST   | `/docs/upload`                  | Upload document or scanned image         |
+| GET    | `/docs/documents`               | Retrieve user documents & metadata       |
+| GET    | `/docs/documents/{id}/graph`    | Document entity co-occurrence graph      |
+| GET    | `/docs/graph/global`            | Multi-document cross-entity graph        |
+| POST   | `/docs/documents/{id}/chat`     | RAG question-answering with citations    |
