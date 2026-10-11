@@ -1,7 +1,9 @@
 // Centralized API client for DocuMind
 
 const getBaseUrl = () => {
-  return localStorage.getItem("DOCUMIND_API_URL") || "";
+  const envUrl = typeof import.meta !== "undefined" && import.meta.env && import.meta.env.VITE_API_URL ? import.meta.env.VITE_API_URL : "";
+  const stored = localStorage.getItem("DOCUMIND_API_URL");
+  return (stored || envUrl || "").replace(/\/$/, "");
 };
 
 const getToken = () => {
