@@ -26,11 +26,18 @@ class UserLogin(BaseModel):
     password: str
 
 # ── Helpers ──────────────────────────────────────────
+def _safe_password(password: str) -> str:
+    if not password:
+        return ""
+    # bcrypt hard limitation is 72 bytes
+    pwd_bytes = password.encode("utf-8")[:72]
+    return pwd_bytes.decode("utf-8", errors="ignore")
+
 def hash_password(password: str):
-    return pwd_context.hash(password)
+    return pwd_context.hash(_safe_password(password))
 
 def verify_password(plain: str, hashed: str):
-    return pwd_context.verify(plain, hashed)
+    return pwd_context.verify(_safe_password(plain), hashed)
 
 def create_token(user_id: int):
     expire = datetime.utcnow() + timedelta(hours=24)
