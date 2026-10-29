@@ -106,7 +106,7 @@ export default function UploadModal({ isOpen, onClose, onUploadSuccess }) {
               ref={inputRef}
               type="file"
               onChange={handleChange}
-              accept=".pdf,.docx,.txt,.png,.jpg,.jpeg"
+              accept=".pdf,.docx,.txt,.png,.jpg,.jpeg,.webp"
               className="hidden"
             />
 

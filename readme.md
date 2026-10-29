@@ -80,8 +80,17 @@ Create a `.env` file in the root or `backend/` folder:
 ```env
 # Optional: defaults to local SQLite (sqlite:///./documind.db) if omitted
 DATABASE_URL=sqlite:///./documind.db
-SECRET_KEY=your_secret_key
+# Required, at least 32 random characters. The server refuses to start without it.
+# Generate one: python -c "import secrets; print(secrets.token_urlsafe(48))"
+SECRET_KEY=
 GROQ_API_KEY=your_groq_api_key
+
+# Optional
+CORS_ORIGINS=            # comma-separated origins, only needed if the frontend is on another domain
+ENABLE_API_DOCS=false    # true serves Swagger UI at /api-docs (keep off in production)
+MAX_UPLOAD_MB=20
+MAX_PDF_PAGES=200
+ACCESS_TOKEN_TTL_HOURS=24
 ```
 
 ### 4. Run the Full Application
@@ -99,6 +108,8 @@ Open `http://127.0.0.1:8000` in your browser.
 ---
 
 ## API Endpoints
+
+All `/docs/*` endpoints require an `Authorization: Bearer <access_token>` header, using the token returned by `/auth/login`.
 
 | Method | Endpoint                        | Description                              |
 | ------ | ------------------------------- | ---------------------------------------- |

@@ -125,7 +125,8 @@ export default function AuthModal({ onAuthenticated }) {
               <input
                 type="password"
                 required
-                maxLength={72}
+                minLength={mode === 'signup' ? 8 : undefined}
+                maxLength={128}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••••••"

@@ -1,9 +1,12 @@
 // Centralized API client for DocuMind
 
+// Fired when the server rejects the stored token (expired or invalid)
+export const UNAUTHORIZED_EVENT = "documind:unauthorized";
+
 const getBaseUrl = () => {
-  const envUrl = typeof import.meta !== "undefined" && import.meta.env && import.meta.env.VITE_API_URL ? import.meta.env.VITE_API_URL : "";
-  const stored = localStorage.getItem("DOCUMIND_API_URL");
-  return (stored || envUrl || "").replace(/\/$/, "");
+  // Only set at build time; never read from localStorage, where it could be tampered with
+  const envUrl = import.meta.env.VITE_API_URL || "";
+  return envUrl.replace(/\/$/, "");
 };
 
 const getToken = () => {
@@ -22,12 +25,21 @@ export const isAuthenticated = () => {
   return !!getToken();
 };
 
-const request = async (endpoint, options = {}) => {
-  const baseUrl = getBaseUrl();
-  const url = `${baseUrl}${endpoint}`;
+const errorMessage = (data, status) => {
+  // FastAPI validation errors (422) return a list of { msg, loc } objects
+  if (Array.isArray(data.detail)) {
+    return data.detail.map((d) => d.msg).join("; ");
+  }
+  return data.detail || data.message || `Request failed (${status})`;
+};
+
+const request = async (endpoint, { auth = true, ...options } = {}) => {
+  const url = `${getBaseUrl()}${endpoint}`;
+  const token = auth ? getToken() : null;
 
   const headers = {
     ...(options.headers || {}),
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
   };
 
   const response = await fetch(url, {
@@ -42,8 +54,13 @@ const request = async (endpoint, options = {}) => {
     data = { detail: `Server error (${response.status}): ${response.statusText || 'Unknown response'}` };
   }
 
+  if (response.status === 401 && token) {
+    setToken(null);
+    window.dispatchEvent(new Event(UNAUTHORIZED_EVENT));
+  }
+
   if (!response.ok) {
-    throw new Error(data.detail || data.message || `Request failed (${response.status})`);
+    throw new Error(errorMessage(data, response.status));
   }
 
   return data;
@@ -53,6 +70,7 @@ export const api = {
   // Auth
   async signup(email, password) {
     return request("/auth/signup", {
+      auth: false,
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email, password }),
@@ -61,6 +79,7 @@ export const api = {
 
   async login(email, password) {
     const res = await request("/auth/login", {
+      auth: false,
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email, password }),
@@ -77,39 +96,33 @@ export const api = {
 
   // Documents
   async listDocuments() {
-    const token = getToken();
-    return request(`/docs/documents?token=${token}`);
+    return request("/docs/documents");
   },
 
   async uploadDocument(file) {
-    const token = getToken();
     const formData = new FormData();
     formData.append("file", file);
 
-    return request(`/docs/upload?token=${token}`, {
+    return request("/docs/upload", {
       method: "POST",
       body: formData,
     });
   },
 
   async getEntities(docId) {
-    const token = getToken();
-    return request(`/docs/documents/${docId}/entities?token=${token}`);
+    return request(`/docs/documents/${docId}/entities`);
   },
 
   async getDocumentGraph(docId) {
-    const token = getToken();
-    return request(`/docs/documents/${docId}/graph?token=${token}`);
+    return request(`/docs/documents/${docId}/graph`);
   },
 
   async getGlobalGraph() {
-    const token = getToken();
-    return request(`/docs/graph/global?token=${token}`);
+    return request("/docs/graph/global");
   },
 
   async chatWithDocument(docId, question) {
-    const token = getToken();
-    return request(`/docs/documents/${docId}/chat?token=${token}`, {
+    return request(`/docs/documents/${docId}/chat`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ question }),

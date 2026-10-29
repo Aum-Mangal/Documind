@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { api, isAuthenticated } from './api'
+import { api, isAuthenticated, UNAUTHORIZED_EVENT } from './api'
 import Navbar from './components/Navbar'
 import AuthModal from './components/AuthModal'
 import Dashboard from './components/Dashboard'
@@ -14,6 +14,14 @@ export default function App() {
   useEffect(() => {
     setAuthed(isAuthenticated())
     setCheckingAuth(false)
+
+    // The API client clears an expired/invalid token and fires this event
+    const handleUnauthorized = () => {
+      setAuthed(false)
+      setSelectedDoc(null)
+    }
+    window.addEventListener(UNAUTHORIZED_EVENT, handleUnauthorized)
+    return () => window.removeEventListener(UNAUTHORIZED_EVENT, handleUnauthorized)
   }, [])
 
   const handleLogout = () => {
