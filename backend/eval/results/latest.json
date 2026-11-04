@@ -1,10 +1,10 @@
 {
-  "run_at": "2026-11-04T09:43:55+00:00",
+  "run_at": "2026-11-04T10:03:13+00:00",
   "corpus": {
     "documents": 6,
     "pages": 25,
     "chunks": 16,
-    "ingest_seconds": 2.0
+    "ingest_seconds": 3.0
   },
   "questions": {
     "answerable": 66,
@@ -25,8 +25,9 @@
     "min_rerank_score": -9.0,
     "rrf_keyword_weight": 0.5,
     "rerank_candidates": 10,
-    "llm_model": "openai/gpt-oss-20b"
+    "llm_model": null
   },
+  "app_mode": "hybrid+rerank",
   "modes": {
     "vector": {
       "recall@1": 0.818,
@@ -35,8 +36,8 @@
       "recall@10": 1.0,
       "mrr@10": 0.894,
       "page_accuracy@1": 0.818,
-      "latency_p50_ms": 8.0,
-      "latency_p95_ms": 9.1,
+      "latency_p50_ms": 9.3,
+      "latency_p95_ms": 17.6,
       "recall@5_by_type": {
         "distractor": 1.0,
         "exact": 1.0,
@@ -52,8 +53,8 @@
       "recall@10": 0.985,
       "mrr@10": 0.802,
       "page_accuracy@1": 0.667,
-      "latency_p50_ms": 7.1,
-      "latency_p95_ms": 8.5,
+      "latency_p50_ms": 8.5,
+      "latency_p95_ms": 14.3,
       "recall@5_by_type": {
         "distractor": 1.0,
         "exact": 1.0,
@@ -69,8 +70,8 @@
       "recall@10": 1.0,
       "mrr@10": 0.896,
       "page_accuracy@1": 0.818,
-      "latency_p50_ms": 7.2,
-      "latency_p95_ms": 8.5,
+      "latency_p50_ms": 8.8,
+      "latency_p95_ms": 16.1,
       "recall@5_by_type": {
         "distractor": 1.0,
         "exact": 1.0,
@@ -86,8 +87,42 @@
       "recall@10": 1.0,
       "mrr@10": 0.936,
       "page_accuracy@1": 0.894,
-      "latency_p50_ms": 324.3,
-      "latency_p95_ms": 362.8,
+      "latency_p50_ms": 411.6,
+      "latency_p95_ms": 623.9,
+      "recall@5_by_type": {
+        "distractor": 1.0,
+        "exact": 1.0,
+        "lookup": 1.0,
+        "numeric": 1.0,
+        "paraphrase": 0.944
+      }
+    },
+    "hybrid+graph": {
+      "recall@1": 0.727,
+      "recall@3": 0.864,
+      "recall@5": 0.985,
+      "recall@10": 1.0,
+      "mrr@10": 0.822,
+      "page_accuracy@1": 0.727,
+      "latency_p50_ms": 9.6,
+      "latency_p95_ms": 22.9,
+      "recall@5_by_type": {
+        "distractor": 1.0,
+        "exact": 1.0,
+        "lookup": 1.0,
+        "numeric": 1.0,
+        "paraphrase": 0.944
+      }
+    },
+    "hybrid+graph+rerank": {
+      "recall@1": 0.894,
+      "recall@3": 0.97,
+      "recall@5": 0.985,
+      "recall@10": 1.0,
+      "mrr@10": 0.936,
+      "page_accuracy@1": 0.894,
+      "latency_p50_ms": 414.8,
+      "latency_p95_ms": 587.6,
       "recall@5_by_type": {
         "distractor": 1.0,
         "exact": 1.0,
@@ -97,19 +132,7 @@
       }
     }
   },
-  "end_to_end": {
-    "answerable_answered": 0.97,
-    "answered_with_correct_citation": 1.0,
-    "unanswerable_declined": 1.0,
-    "wrongly_declined": [
-      "board-15",
-      "hr-13"
-    ],
-    "wrong_or_missing_citation": [],
-    "wrongly_answered": [],
-    "llm_calls": 70,
-    "llm_tokens": 107745
-  },
+  "end_to_end": null,
   "abstention": {
     "answerable_answered": 0.985,
     "unanswerable_declined": 0.375,

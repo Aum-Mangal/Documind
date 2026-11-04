@@ -3,19 +3,34 @@ import cytoscape from 'cytoscape'
 import { ZoomIn, ZoomOut, Maximize2, RotateCcw, Info, Search, EyeOff } from 'lucide-react'
 
 const ENTITY_COLORS = {
-  PERSON: '#4F6B3A',       // Olive
-  ORG: '#3E5A7A',          // Slate blue
-  ORGANIZATION: '#3E5A7A', // Slate blue
-  GPE: '#8A5A83',          // Plum
-  LOCATION: '#8A5A83',     // Plum
-  PRODUCT: '#B07A2A',      // Ochre
-  DATE: '#A3542F',         // Terracotta
-  MONEY: '#3F7A72',        // Teal
-  DOCUMENT: '#6B6255',     // Umber
-  DEFAULT: '#9A8F7E'       // Stone
+  PERSON: '#4F6B3A',   // Olive
+  ORG: '#3E5A7A',      // Slate blue
+  PLACE: '#8A5A83',    // Plum
+  PRODUCT: '#B07A2A',  // Ochre
+  EVENT: '#A3542F',    // Terracotta
+  GROUP: '#3F7A72',    // Teal
+  WORK: '#6B6255',     // Umber
+  DEFAULT: '#9A8F7E'   // Stone
 }
 
 const colorFor = (type) => ENTITY_COLORS[type] || ENTITY_COLORS.DEFAULT
+
+// Force-directed layout. It must start from random positions: every node begins at the
+// origin, and from identical positions the forces can only push nodes along a line.
+// Relation edges are kept shorter than co-occurrence ones so stated facts sit close together.
+const LAYOUT = {
+  name: 'cose',
+  animate: true,
+  animationDuration: 700,
+  randomize: true,
+  nodeDimensionsIncludeLabels: true,
+  nodeRepulsion: () => 18000,
+  idealEdgeLength: (edge) => (edge.data('kind') === 'relation' ? 110 : 170),
+  edgeElasticity: (edge) => (edge.data('kind') === 'relation' ? 120 : 40),
+  gravity: 0.3,
+  numIter: 1500,
+  padding: 40
+}
 
 export default function KnowledgeGraph({ graphData, title = "Knowledge Graph" }) {
   const containerRef = useRef(null)
@@ -45,7 +60,8 @@ export default function KnowledgeGraph({ graphData, title = "Knowledge Graph" })
           id: `edge-${idx}`,
           source: e.source,
           target: e.target,
-          label: e.label || 'COOCCURS_WITH',
+          label: e.label || '',
+          kind: e.kind || 'cooccurrence',
           weight: e.weight || 1
         }
       }))
@@ -95,6 +111,26 @@ export default function KnowledgeGraph({ graphData, title = "Knowledge Graph" })
           }
         },
         {
+          // Facts extracted from the text: labelled, directed, darker
+          selector: 'edge[kind = "relation"]',
+          style: {
+            'line-color': '#8C6A4F',
+            'target-arrow-color': '#8C6A4F',
+            'target-arrow-shape': 'triangle',
+            'arrow-scale': 0.8,
+            'width': 1.8,
+            'opacity': 0.9,
+            'label': 'data(label)',
+            'font-size': '9px',
+            'font-family': 'IBM Plex Sans, sans-serif',
+            'color': '#6B6255',
+            'text-rotation': 'autorotate',
+            'text-background-color': '#F4EFE6',
+            'text-background-opacity': 0.9,
+            'text-background-padding': '1px'
+          }
+        },
+        {
           selector: 'edge.highlighted',
           style: {
             'line-color': '#A3542F',
@@ -108,17 +144,7 @@ export default function KnowledgeGraph({ graphData, title = "Knowledge Graph" })
         // Legend filter: hidden entity types (their edges hide with them)
         { selector: 'node.filtered', style: { 'display': 'none' } }
       ],
-      layout: {
-        name: 'cose',
-        animate: true,
-        animationDuration: 800,
-        nodeDimensionsIncludeLabels: true,
-        nodeRepulsion: 4500,
-        idealEdgeLength: 80,
-        edgeElasticity: 0.45,
-        gravity: 0.25,
-        randomize: false
-      }
+      layout: LAYOUT
     })
 
     cy.on('tap', 'node', (evt) => {
@@ -184,14 +210,7 @@ export default function KnowledgeGraph({ graphData, title = "Knowledge Graph" })
   const handleZoomIn = () => cyRef.current?.zoom(cyRef.current.zoom() * 1.3)
   const handleZoomOut = () => cyRef.current?.zoom(cyRef.current.zoom() * 0.7)
   const handleFit = () => cyRef.current?.fit(undefined, 40)
-  const handleResetLayout = () => {
-    cyRef.current?.layout({
-      name: 'cose',
-      animate: true,
-      animationDuration: 600,
-      nodeRepulsion: 4500
-    }).run()
-  }
+  const handleResetLayout = () => cyRef.current?.layout(LAYOUT).run()
 
   const typeCounts = (graphData?.nodes || []).reduce((acc, n) => {
     const type = n.type || 'OTHER'

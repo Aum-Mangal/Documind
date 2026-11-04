@@ -6,7 +6,7 @@ The project was built to explore how modern AI applications combine large langua
 
 ## Features
 
-* **Interactive Knowledge Graph**: Document-level and global multi-document entity co-occurrence networks powered by Cytoscape.js
+* **Knowledge graph**: built once at ingestion and stored in Postgres. spaCy finds people, organisations, places and products (dates and numbers are left out); names are normalised and aliases merged within and across documents ("Ms Okafor" → "Maria Okafor", "Northwind" → "Northwind Supply"); the LLM corrects entity types and extracts typed relations ("Halden & Rowe —appointed→ Maria Okafor") from the most entity-dense passages, restricted to the names found so it cannot invent nodes. Shown with Cytoscape.js as labelled arrows plus co-occurrence links
 * **OCR Support**: Automatic PyMuPDF extraction with Tesseract OCR engine fallback for scanned documents and image files (`.pdf`, `.png`, `.jpg`, `.jpeg`, `.webp`, `.docx`, `.txt`)
 * **Background ingestion**: uploads return immediately; a crash-safe Postgres job queue (`FOR UPDATE SKIP LOCKED`, retries with backoff, stale-job recovery) extracts text page by page, OCRs only scanned pages, and embeds sentence-aware chunks into pgvector, with live progress over server-sent events
 * **Hybrid retrieval**: pgvector HNSW similarity and Postgres full-text search fused with Reciprocal Rank Fusion in a single SQL query, then reranked by a cross-encoder
@@ -166,6 +166,8 @@ What the evaluation changed:
 - With keyword search now strong, equal-weight fusion let its less precise top hits displace better vector hits (hybrid recall@1 fell from 83% to 73%); a keyword weight of 0.5 in Reciprocal Rank Fusion restored it.
 - Reranking the top 10 candidates instead of 30 gave identical quality at about 40% lower latency.
 - The abstention threshold was chosen from a sweep over the same scores (see `eval/results/end-to-end.md`).
+
+- Graph-assisted retrieval (passages mentioning entities named in the question, as a third ranked list) lowered hybrid recall@1 from 82% to 73% and left hybrid+rerank unchanged, because every passage naming a common entity qualifies. It ships switched off (`RRF_GRAPH_WEIGHT=0`) and stays in the evaluation as an ablation.
 
 This corpus is small enough that vector search alone already performs well; treat the numbers as a regression baseline, not a benchmark. CI runs the retrieval part on every push and fails if hybrid+rerank recall@5 drops below 0.95 or MRR below 0.90.
 

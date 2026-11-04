@@ -8,6 +8,7 @@ const STAGE_LABELS = {
   parsing: 'Reading the file',
   chunking: 'Splitting into passages',
   embedding: 'Indexing passages',
+  linking: 'Finding people, places and links',
   summarizing: 'Writing a summary'
 }
 

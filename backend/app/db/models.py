@@ -11,6 +11,7 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    UniqueConstraint,
     func,
     text,
 )
@@ -149,3 +150,45 @@ class UsageEvent(Base):
     prompt_tokens: Mapped[int] = mapped_column(Integer)
     completion_tokens: Mapped[int] = mapped_column(Integer)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class Entity(Base):
+    """A named entity in a user's library, shared by every document that mentions it."""
+
+    __tablename__ = "entities"
+    __table_args__ = (UniqueConstraint("user_id", "canonical"),)
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    # Lowercased, punctuation-free key that two spellings of the same name share
+    canonical: Mapped[str] = mapped_column(String(200))
+    name: Mapped[str] = mapped_column(String(200))
+    type: Mapped[str] = mapped_column(String(16))
+
+
+class EntityMention(Base):
+    __tablename__ = "entity_mentions"
+    __table_args__ = (Index("ix_entity_mentions_document_id", "document_id"),)
+
+    entity_id: Mapped[int] = mapped_column(ForeignKey("entities.id", ondelete="CASCADE"), primary_key=True)
+    chunk_id: Mapped[int] = mapped_column(ForeignKey("chunks.id", ondelete="CASCADE"), primary_key=True)
+    document_id: Mapped[int] = mapped_column(ForeignKey("documents.id", ondelete="CASCADE"))
+    count: Mapped[int] = mapped_column(Integer)
+
+
+class Relation(Base):
+    """A fact connecting two entities, as stated in one passage (extracted by the LLM)."""
+
+    __tablename__ = "relations"
+    __table_args__ = (
+        UniqueConstraint("document_id", "source_id", "target_id", "predicate"),
+        Index("ix_relations_source_id", "source_id"),
+        Index("ix_relations_target_id", "target_id"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    document_id: Mapped[int] = mapped_column(ForeignKey("documents.id", ondelete="CASCADE"))
+    chunk_id: Mapped[int | None] = mapped_column(ForeignKey("chunks.id", ondelete="CASCADE"))
+    source_id: Mapped[int] = mapped_column(ForeignKey("entities.id", ondelete="CASCADE"))
+    target_id: Mapped[int] = mapped_column(ForeignKey("entities.id", ondelete="CASCADE"))
+    predicate: Mapped[str] = mapped_column(String(60))

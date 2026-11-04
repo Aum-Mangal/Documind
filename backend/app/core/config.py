@@ -85,6 +85,15 @@ class Settings(DatabaseSettings):
     min_rerank_score: float = -9.0
     chat_history_messages: int = 6
 
+    # ── Knowledge graph ──────────────────────────────
+    # Ask the LLM for relations between entities in the most entity-dense passages of each document
+    relation_extraction_enabled: bool = True
+    relation_max_chunks: int = 6
+    # Weight, in Reciprocal Rank Fusion, of passages that mention entities named in the question.
+    # Off by default: in the evaluation it lowered hybrid recall@1 (82% -> 73%) and didn't change
+    # hybrid+rerank, because every passage naming a common entity qualifies. See eval/results.
+    rrf_graph_weight: float = 0.0
+
     # ── Rate limits (per window; 0 disables one) ─────
     rate_limits_enabled: bool = True
     # Behind a proxy (Hugging Face Spaces, Caddy) the client IP is in X-Forwarded-For

@@ -2,25 +2,10 @@ import spacy
 
 _nlp = None
 
+
 def get_nlp():
+    """The spaCy English pipeline, loaded once. Only the parts NER needs are kept."""
     global _nlp
     if _nlp is None:
-        _nlp = spacy.load("en_core_web_sm")
+        _nlp = spacy.load("en_core_web_sm", exclude=["lemmatizer"])
     return _nlp
-
-def extract_entities(text: str) -> list:
-    if len(text) > 5000:
-        text = text[:5000]
-
-    nlp = get_nlp()
-    doc = nlp(text)
-
-    entities = []
-    for ent in doc.ents:
-        entities.append({
-            "text": " ".join(ent.text.split()),
-            "label": ent.label_,
-            "description": spacy.explain(ent.label_)
-        })
-
-    return entities

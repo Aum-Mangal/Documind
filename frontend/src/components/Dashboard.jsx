@@ -260,7 +260,7 @@ function GlobalGraph() {
         <div>
           <h1 className="font-serif text-3xl font-semibold text-ink">Knowledge graph</h1>
           <p className="mt-1 text-sm text-ink-muted">
-            People, organisations, places and other entities across your documents, linked when they appear together.
+            People, organisations, places and products across your documents. Arrows are facts stated in the text; faint lines join names mentioned together.
           </p>
         </div>
         <button onClick={loadGraph} disabled={loading} className="btn-secondary shrink-0">

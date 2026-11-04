@@ -9,6 +9,7 @@ The database named in the URL is dropped and recreated, then migrated with Alemb
 is replaced with a stand-in, so nothing calls Groq; the embedding and reranker models are real.
 """
 import asyncio
+import json
 import os
 import subprocess
 import sys
@@ -66,7 +67,10 @@ def session_factory():
 def clean_tables(session_factory):
     async def truncate():
         async with session_factory() as session:
-            await session.execute(text("TRUNCATE users, documents, chunks, conversations, messages, usage_events RESTART IDENTITY CASCADE"))
+            await session.execute(text(
+                "TRUNCATE users, documents, chunks, conversations, messages, usage_events, entities, "
+                "entity_mentions, relations RESTART IDENTITY CASCADE"
+            ))
             await session.commit()
 
     asyncio.run(truncate())
@@ -86,6 +90,15 @@ class FakeLLM:
         record_usage(100, 20)
         if "Rewrite the user's latest question" in system:
             return "Why was the Atlas launch delayed?"
+        if "extract a knowledge graph" in system:
+            names = json.loads(user.splitlines()[0].removeprefix("Entities: "))
+            relations = []
+            if "Maria Okafor" in names and "Halden & Rowe" in names:
+                relations.append({"subject": "Halden & Rowe", "relation": "appointed", "object": "Maria Okafor"})
+            if "Daniel Weiss" in names and "Porto" in names:
+                relations.append({"subject": "Daniel Weiss", "relation": "leads", "object": "Porto"})
+            relations.append({"subject": "Nobody Invented", "relation": "made up", "object": names[0]})
+            return json.dumps({"types": {"Porto": "PLACE", "Atlas": "PRODUCT", "Board": "NONE"}, "relations": relations})
         if "Summarize" in system:
             return "A short summary."
         return self.answer
@@ -94,11 +107,12 @@ class FakeLLM:
 @pytest.fixture
 def llm(monkeypatch):
     fake = FakeLLM()
+    import app.knowledge.relations as relations_module
     import app.retrieval.answer as answer_module
     import app.services.summarizer as summarizer_module
 
-    monkeypatch.setattr(answer_module, "complete", fake)
-    monkeypatch.setattr(summarizer_module, "complete", fake)
+    for module in (answer_module, summarizer_module, relations_module):
+        monkeypatch.setattr(module, "complete", fake)
     return fake
 
 

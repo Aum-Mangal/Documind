@@ -20,9 +20,9 @@ from app.db.session import SessionLocal
 from app.ingestion.pipeline import document_state
 from app.ingestion.progress import progress_bus
 from app.ingestion.worker import worker
+from app.knowledge.graph import document_entities, document_graph, library_graph
+from app.knowledge.store import delete_orphan_entities
 from app.services.extraction import clean_filename, file_extension, validate_upload
-from app.services.graph import generate_document_graph, generate_global_graph
-from app.services.ner import extract_entities
 from app.services.ocr import ExtractionError
 from app.services.quotas import ensure_storage_allowance
 from app.services.storage import get_storage
@@ -142,7 +142,9 @@ async def get_document(doc_id: int, user: CurrentUser, session: DbSession):
 async def delete_document(doc_id: int, user: CurrentUser, session: DbSession):
     doc = await _get_owned_document(session, doc_id, user)
     storage_key = doc.storage_key
-    await session.delete(doc)  # chunks cascade in the database
+    await session.delete(doc)  # chunks, mentions and relations cascade in the database
+    await session.flush()
+    await delete_orphan_entities(session, user.id)
     await session.commit()
     if storage_key:
         try:
@@ -233,25 +235,20 @@ async def document_events(doc_id: int, request: Request, user: CurrentUser, sess
     )
 
 
-# ── Entities and graphs ──────────────────────────────
+# ── Entities and graphs (built during ingestion, read from the database) ──
 
 @router.get("/documents/{doc_id}/entities")
 async def get_entities(doc_id: int, user: CurrentUser, session: DbSession):
-    doc = await _get_owned_document(session, doc_id, user, with_text=True)
-    entities = await run_in_threadpool(extract_entities, doc.raw_text or "")
-    return {"document_id": doc_id, "filename": doc.filename, "entities": entities}
+    doc = await _get_owned_document(session, doc_id, user)
+    return {"document_id": doc_id, "filename": doc.filename, "entities": await document_entities(session, doc_id)}
 
 
 @router.get("/documents/{doc_id}/graph")
 async def get_document_graph(doc_id: int, user: CurrentUser, session: DbSession):
-    doc = await _get_owned_document(session, doc_id, user, with_text=True)
-    return await run_in_threadpool(generate_document_graph, doc.raw_text or "")
+    await _get_owned_document(session, doc_id, user)
+    return await document_graph(session, doc_id)
 
 
 @router.get("/graph")
 async def get_global_graph(user: CurrentUser, session: DbSession):
-    result = await session.execute(
-        select(Document).where(Document.user_id == user.id, Document.status == "ready")
-        .order_by(Document.created_at.desc())
-    )
-    return await run_in_threadpool(generate_global_graph, list(result.scalars()))
+    return await library_graph(session, user.id)

@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.db.models import EMBEDDING_DIM
+from app.knowledge.entities import text_key
 
 # The usual RRF constant; it damps the advantage of the very top ranks
 RRF_K = 60
@@ -43,18 +44,37 @@ keyword_hits AS (
      ORDER BY ts_rank_cd(c.tsv, q.query) DESC
      LIMIT :limit
 ),
+graph_hits AS (
+    -- Passages mentioning an entity the question names (whole-word match on canonical names),
+    -- ranked by how often they mention those entities
+    SELECT m.chunk_id AS id, row_number() OVER (ORDER BY sum(m.count) DESC, m.chunk_id) AS rank
+      FROM entities e
+      JOIN entity_mentions m ON m.entity_id = e.id
+     WHERE :use_graph
+       AND e.user_id = :user_id
+       AND length(e.canonical) >= 3
+       AND strpos(:entity_text, ' ' || e.canonical || ' ') > 0
+       AND (CAST(:document_ids AS integer[]) IS NULL OR m.document_id = ANY(:document_ids))
+     GROUP BY m.chunk_id
+     ORDER BY sum(m.count) DESC, m.chunk_id
+     LIMIT :limit
+),
 fused AS (
     SELECT id,
-           sum(CASE WHEN source = 'keyword' THEN :keyword_weight ELSE 1.0 END / (:rrf_k + rank)) AS rrf,
+           sum(CASE source WHEN 'keyword' THEN :keyword_weight WHEN 'graph' THEN :graph_weight ELSE 1.0 END
+               / (:rrf_k + rank)) AS rrf,
            min(rank) FILTER (WHERE source = 'vector') AS vector_rank,
-           min(rank) FILTER (WHERE source = 'keyword') AS keyword_rank
+           min(rank) FILTER (WHERE source = 'keyword') AS keyword_rank,
+           min(rank) FILTER (WHERE source = 'graph') AS graph_rank
       FROM (SELECT id, rank, 'vector' AS source FROM vector_hits
             UNION ALL
-            SELECT id, rank, 'keyword' AS source FROM keyword_hits) hits
+            SELECT id, rank, 'keyword' AS source FROM keyword_hits
+            UNION ALL
+            SELECT id, rank, 'graph' AS source FROM graph_hits) hits
      GROUP BY id
 )
 SELECT c.id AS chunk_id, c.document_id, d.filename, c.page_start, c.page_end, c.content,
-       f.rrf, f.vector_rank, f.keyword_rank
+       f.rrf, f.vector_rank, f.keyword_rank, f.graph_rank
   FROM fused f
   JOIN chunks c ON c.id = f.id
   JOIN documents d ON d.id = c.document_id
@@ -77,6 +97,7 @@ class Candidate:
     rrf: float
     vector_rank: int | None
     keyword_rank: int | None
+    graph_rank: int | None
 
 
 async def hybrid_search(
@@ -87,10 +108,15 @@ async def hybrid_search(
     document_ids: list[int] | None = None,
     limit: int = 30,
     mode: str = "hybrid",
+    use_graph: bool | None = None,
 ) -> list[Candidate]:
-    """mode: 'hybrid' (both, fused), or 'vector' / 'keyword' alone, for evaluation."""
+    """mode: 'hybrid' (fused), or 'vector' / 'keyword' alone, for evaluation. use_graph adds
+    passages mentioning entities the question names; by default it follows RRF_GRAPH_WEIGHT."""
     if mode not in ("hybrid", "vector", "keyword"):
         raise ValueError(f"Unknown search mode: {mode}")
+    settings = get_settings()
+    if use_graph is None:
+        use_graph = mode == "hybrid" and settings.rrf_graph_weight > 0
     # With a per-user filter, a plain HNSW scan can return too few rows; pgvector 0.8's
     # iterative scan keeps searching until the filter is satisfied. (A custom setting, so
     # older pgvector versions simply ignore it.)
@@ -102,7 +128,10 @@ async def hybrid_search(
         "document_ids": document_ids,
         "limit": limit,
         "rrf_k": RRF_K,
-        "keyword_weight": get_settings().rrf_keyword_weight,
+        "keyword_weight": settings.rrf_keyword_weight,
+        "graph_weight": settings.rrf_graph_weight or 0.5,
+        "use_graph": use_graph,
+        "entity_text": text_key(query_text),
         "use_vector": mode != "keyword",
         "use_keyword": mode != "vector",
     })

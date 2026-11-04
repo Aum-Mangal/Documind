@@ -27,7 +27,7 @@ from pathlib import Path
 EVAL_DIR = Path(__file__).resolve().parent
 BACKEND_DIR = EVAL_DIR.parent
 PAGE_BREAK = "<<<PAGE>>>"
-MODES = ["vector", "keyword", "hybrid", "hybrid+rerank"]
+MODES = ["vector", "keyword", "hybrid", "hybrid+rerank", "hybrid+graph", "hybrid+graph+rerank"]
 KS = (1, 3, 5, 10)
 
 
@@ -165,6 +165,8 @@ async def evaluate(database_url: str, with_llm: bool = False) -> dict:
 
     # ── Score every mode ──
     results = {m: ModeResult() for m in MODES}
+    # The mode the app uses; abstention and the quality gate are measured on it
+    app_mode = "hybrid+graph+rerank" if settings.rrf_graph_weight > 0 else "hybrid+rerank"
     top_scores: dict[str, float] = {}
     async with sessions() as session:
         for q in questions:
@@ -173,14 +175,15 @@ async def evaluate(database_url: str, with_llm: bool = False) -> dict:
                 vector = embed_query(q["question"])
                 candidates = await hybrid_search(
                     session, user_id, q["question"], vector, None,
-                    limit=settings.retrieval_candidates, mode=mode.split("+")[0],
+                    limit=settings.retrieval_candidates, mode=mode.split("+")[0], use_graph="graph" in mode,
                 )
-                if mode == "hybrid+rerank" and candidates:
+                if mode.endswith("rerank") and candidates:
                     candidates = candidates[: settings.rerank_candidates]
                     scores = rerank(q["question"], [c.content for c in candidates])
                     order = sorted(range(len(candidates)), key=lambda i: scores[i], reverse=True)
                     candidates = [candidates[i] for i in order]
-                    top_scores[q["id"]] = scores[order[0]]
+                    if mode == app_mode:
+                        top_scores[q["id"]] = scores[order[0]]
                 elapsed = (time.perf_counter() - t0) * 1000
 
                 if q["type"] == "unanswerable":
@@ -215,6 +218,7 @@ async def evaluate(database_url: str, with_llm: bool = False) -> dict:
                    "chunk_target_tokens": settings.chunk_target_tokens, "candidates": settings.retrieval_candidates,
                    "min_rerank_score": threshold, "rrf_keyword_weight": settings.rrf_keyword_weight,
                    "rerank_candidates": settings.rerank_candidates, "llm_model": settings.groq_model if with_llm else None},
+        "app_mode": app_mode,
         "modes": {m: results[m].summary() for m in MODES},
         "end_to_end": end_to_end,
         "abstention": {
@@ -287,14 +291,14 @@ def markdown_report(r: dict) -> str:
     for mode, m in r["modes"].items():
         lines.append(f"| {mode} | {m['recall@1']:.0%} | {m['recall@3']:.0%} | {m['recall@5']:.0%} | {m['recall@10']:.0%} | "
                      f"{m['mrr@10']:.3f} | {m['page_accuracy@1']:.0%} | {m['latency_p50_ms']} | {m['latency_p95_ms']} |")
-    types = list(r["modes"]["hybrid+rerank"]["recall@5_by_type"])
+    types = list(r["modes"][r["app_mode"]]["recall@5_by_type"])
     lines += ["", "Recall@5 by question type:", "", "| Mode | " + " | ".join(types) + " |", "|---|" + "---|" * len(types)]
     for mode, m in r["modes"].items():
         lines.append(f"| {mode} | " + " | ".join(f"{m['recall@5_by_type'][t]:.0%}" for t in types) + " |")
     a = r["abstention"]
     lines += [
         "",
-        f"Abstention (hybrid+rerank, threshold {r['config']['min_rerank_score']}): "
+        f"Abstention ({r['app_mode']}, threshold {r['config']['min_rerank_score']}): "
         f"{a['answerable_answered']:.0%} of answerable questions answered, "
         f"{a['unanswerable_declined']:.0%} of unanswerable questions declined.",
     ]
@@ -325,8 +329,8 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--database-url", default=os.environ.get("EVAL_DATABASE_URL"), required=not os.environ.get("EVAL_DATABASE_URL"))
     parser.add_argument("--report", default=str(EVAL_DIR / "results" / "latest.md"))
-    parser.add_argument("--min-recall-at-5", type=float, default=None, help="fail if hybrid+rerank recall@5 is below this")
-    parser.add_argument("--min-mrr", type=float, default=None, help="fail if hybrid+rerank MRR@10 is below this")
+    parser.add_argument("--min-recall-at-5", type=float, default=None, help="fail if the app's mode has recall@5 below this")
+    parser.add_argument("--min-mrr", type=float, default=None, help="fail if the app's mode has MRR@10 below this")
     parser.add_argument("--with-llm", action="store_true",
                         help="also run every question through the LLM (uses GROQ_API_KEY; about 1.5k tokens per question)")
     args = parser.parse_args()
@@ -350,7 +354,7 @@ def main() -> None:
     print(markdown_report(result))
     print(f"Report written to {report}")
 
-    best = result["modes"]["hybrid+rerank"]
+    best = result["modes"][result["app_mode"]]
     failures = []
     if args.min_recall_at_5 is not None and best["recall@5"] < args.min_recall_at_5:
         failures.append(f"recall@5 {best['recall@5']} < {args.min_recall_at_5}")

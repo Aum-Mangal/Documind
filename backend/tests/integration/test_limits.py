@@ -44,11 +44,11 @@ def test_chat_is_limited_per_user(api, worker, settings, monkeypatch):
 def test_daily_ai_allowance(api, worker, settings, monkeypatch, llm):
     headers = make_user(api)
     upload(api, headers)
-    run(worker.run_until_idle())  # the summary costs 120 tokens with the fake LLM
+    run(worker.run_until_idle())  # relation extraction and the summary each cost 120 tokens with the fake LLM
 
     me = api.get("/api/auth/me", headers=headers).json()
     used = me["usage"]["ai_tokens_today"]["used"]
-    assert used == 120
+    assert used > 0 and used % 120 == 0
 
     # Allow exactly one more answer (120 tokens)
     monkeypatch.setattr(settings, "daily_token_quota", used + 100)
@@ -56,7 +56,7 @@ def test_daily_ai_allowance(api, worker, settings, monkeypatch, llm):
     assert ask("Who was appointed chief operating officer?").status_code == 200
     refused = ask("Why was the Atlas launch delayed?")
     assert refused.status_code == 429 and "allowance" in refused.json()["detail"]
-    assert api.get("/api/auth/me", headers=headers).json()["usage"]["ai_tokens_today"]["used"] == 240
+    assert api.get("/api/auth/me", headers=headers).json()["usage"]["ai_tokens_today"]["used"] == used + 120
 
 
 def test_summaries_are_skipped_once_the_allowance_is_used(api, worker, session_factory, settings, monkeypatch):

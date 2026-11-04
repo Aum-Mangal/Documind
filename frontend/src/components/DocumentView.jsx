@@ -11,34 +11,24 @@ const KnowledgeGraph = lazy(() => import('./KnowledgeGraph'))
 const ENTITY_LABELS = {
   PERSON: 'People',
   ORG: 'Organisations',
-  GPE: 'Places',
-  LOC: 'Locations',
-  FAC: 'Facilities',
-  NORP: 'Groups',
+  PLACE: 'Places',
   PRODUCT: 'Products',
   EVENT: 'Events',
-  WORK_OF_ART: 'Works',
-  LAW: 'Laws',
-  LANGUAGE: 'Languages',
-  DATE: 'Dates',
-  TIME: 'Times',
-  MONEY: 'Money',
-  PERCENT: 'Percentages',
-  QUANTITY: 'Quantities',
-  ORDINAL: 'Ordinals',
-  CARDINAL: 'Numbers'
+  GROUP: 'Groups',
+  WORK: 'Works and laws',
+  OTHER: 'Other'
 }
 
 // Show the most informative groups first
-const GROUP_ORDER = ['PERSON', 'ORG', 'GPE', 'LOC', 'PRODUCT', 'EVENT', 'NORP', 'FAC', 'WORK_OF_ART', 'LAW', 'MONEY', 'DATE']
+const GROUP_ORDER = ['PERSON', 'ORG', 'PLACE', 'PRODUCT', 'EVENT', 'GROUP', 'WORK', 'OTHER']
 
 const groupEntities = (entities) => {
   const groups = {}
   for (const ent of entities) {
     const text = ent.text.trim()
     if (!text) continue
-    const set = (groups[ent.label] ||= new Set())
-    set.add(text)
+    const group = (groups[ent.label] ||= new Map())
+    group.set(text, (group.get(text) || 0) + (ent.mentions || 1))
   }
   const rank = (label) => {
     const i = GROUP_ORDER.indexOf(label)
@@ -46,7 +36,12 @@ const groupEntities = (entities) => {
   }
   return Object.entries(groups)
     .sort(([a], [b]) => rank(a) - rank(b))
-    .map(([label, set]) => ({ label, name: ENTITY_LABELS[label] || label, items: [...set] }))
+    .map(([label, group]) => ({
+      label,
+      name: ENTITY_LABELS[label] || label,
+      // Most mentioned first
+      items: [...group.entries()].sort((a, b) => b[1] - a[1]).map(([text, mentions]) => ({ text, mentions }))
+    }))
 }
 
 const VIEWS = [
@@ -117,7 +112,7 @@ function Insights({ doc, view, setView }) {
 
         {loading ? (
           <p className="flex items-center gap-2 text-sm text-ink-muted">
-            <span className="spinner w-4 h-4" /> Finding names, places and dates…
+            <span className="spinner w-4 h-4" /> Loading people, organisations and places…
           </p>
         ) : error ? (
           <p className="text-sm text-danger">{error}</p>
@@ -130,8 +125,9 @@ function Insights({ doc, view, setView }) {
                 <dt className="text-sm font-medium text-ink mb-1.5">{group.name}</dt>
                 <dd className="flex flex-wrap gap-1.5">
                   {group.items.map(item => (
-                    <span key={item} className="rounded border border-line bg-surface px-2 py-0.5 text-sm text-ink-muted">
-                      {item}
+                    <span key={item.text} className="rounded border border-line bg-surface px-2 py-0.5 text-sm text-ink-muted">
+                      {item.text}
+                      {item.mentions > 1 && <span className="ml-1 text-xs text-ink-faint">×{item.mentions}</span>}
                     </span>
                   ))}
                 </dd>
