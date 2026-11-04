@@ -98,10 +98,13 @@ class Settings(DatabaseSettings):
     rerank_candidates: int = 10
     answer_sources: int = 5
     # Reranker scores are logits: unrelated passages score about -11, paraphrased matches -6 to -4,
-    # clear matches above 0. If even the best passage scores below this, we say we can't find it
-    # without calling the LLM. Chosen from the threshold sweep in eval/results/latest.md; near-miss
-    # questions are left for the LLM, which is told to decline when the sources lack the answer.
-    min_rerank_score: float = -9.0
+    # clear matches above 0. For questions across the whole library, if even the best passage
+    # scores below this we decline without calling the LLM. Kept low: vague questions and
+    # list-like text (CVs, brochures) score around -9 to -11 while still being answerable, and the
+    # LLM declines reliably when the sources lack the answer. Never applied to chosen documents.
+    min_rerank_score: float = -10.5
+    # Chosen documents with at most this many chunks are given to the LLM whole (~3,600 tokens)
+    whole_document_chunks: int = 12
     chat_history_messages: int = 6
 
     # ── Knowledge graph ──────────────────────────────

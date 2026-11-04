@@ -131,3 +131,34 @@ def test_search_modes_used_by_the_evaluation(library, session_factory):
     assert run(go("keyword", "Who was made chief operating officer at the quarterly board meeting?"))
     with pytest.raises(ValueError):
         run(go("semantic", "x"))
+
+
+def test_general_questions_about_a_short_chosen_document_get_the_whole_document(api, library, llm):
+    # The reranker scores "Summarise the main points." around -11 against every passage; it must
+    # still reach the model, with the whole document, when the user picked that document
+    body = api.post("/api/chat", headers=library["alice"],
+                    json={"question": "Summarise the main points.", "document_ids": [library["report"]]}).json()
+    assert body["message"]["abstained"] is False
+    _, prompt = llm.calls[-1]
+    for phrase in ("Lisbon office", "Maria Okafor", "Northwind Supply"):  # all three pages
+        assert phrase in prompt
+    # Only the cited passage is shown under the answer
+    assert [s["n"] for s in body["message"]["sources"]] == [1]
+
+
+def test_vague_questions_about_chosen_documents_are_never_declined_before_the_model(api, library, llm, monkeypatch):
+    from app.core.config import get_settings
+
+    monkeypatch.setattr(get_settings(), "whole_document_chunks", 0)  # force passage search
+    calls = len(llm.calls)
+    body = api.post("/api/chat", headers=library["alice"],
+                    json={"question": "how would you rate it", "document_ids": [library["report"]]}).json()
+    assert len(llm.calls) == calls + 1
+    assert body["message"]["abstained"] is False
+
+
+def test_the_model_can_still_decline_for_chosen_documents(api, library, llm):
+    llm.answer = "I couldn't find that in your documents."
+    body = api.post("/api/chat", headers=library["alice"],
+                    json={"question": "What is the CEO's salary?", "document_ids": [library["report"]]}).json()
+    assert body["message"]["abstained"] is True and body["message"]["sources"] == []

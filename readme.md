@@ -185,7 +185,7 @@ What the evaluation changed:
 - Keyword search required every term of a question to match, which natural questions rarely do: keyword-only recall@5 was 30%. Matching any term, ranked by `ts_rank_cd`, raised it to 96%.
 - With keyword search now strong, equal-weight fusion let its less precise top hits displace better vector hits (hybrid recall@1 fell from 83% to 73%); a keyword weight of 0.5 in Reciprocal Rank Fusion restored it.
 - Reranking the top 10 candidates instead of 30 gave identical quality at about 40% lower latency.
-- The abstention threshold was chosen from a sweep over the same scores (see `eval/results/end-to-end.md`).
+- The abstention threshold was first chosen from a sweep over the same scores. Real documents then showed its limit: the reranker scores vague questions ("summarise this", "how would you rate it") and list-like text such as CVs around -9 to -11 even when they are answerable. The pre-LLM cutoff now applies only to questions across the whole library, at -10.5; questions about documents the user chose always reach the model, and short chosen documents (up to 12 chunks) are given to it whole. The end-to-end figures above were measured before this change and the move to allowing grounded assessments; re-run with `--with-llm` to refresh them.
 
 - Graph-assisted retrieval (passages mentioning entities named in the question, as a third ranked list) lowered hybrid recall@1 from 82% to 73% and left hybrid+rerank unchanged, because every passage naming a common entity qualifies. It ships switched off (`RRF_GRAPH_WEIGHT=0`) and stays in the evaluation as an ablation.
 

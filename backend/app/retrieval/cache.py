@@ -53,7 +53,7 @@ async def corpus_version(session: AsyncSession, user_id: int, document_ids: list
 
 def answer_cache_key(user_id: int, document_ids: list[int] | None, version: str, question: str) -> str:
     scope = sorted(document_ids) if document_ids else None
-    return f"answer:v1:{_digest(user_id, scope, version, normalise_question(question))}"
+    return f"answer:v2:{_digest(user_id, scope, version, normalise_question(question))}"
 
 
 async def load_cached_answer(key: str) -> Answer | None:

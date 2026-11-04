@@ -136,3 +136,20 @@ async def hybrid_search(
         "use_keyword": mode != "vector",
     })
     return [Candidate(**row._mapping) for row in rows]
+
+
+_SCOPE_SQL = text("""
+SELECT c.id AS chunk_id, c.document_id, d.filename, c.page_start, c.page_end, c.content,
+       0.0 AS rrf, NULL::int AS vector_rank, NULL::int AS keyword_rank, NULL::int AS graph_rank
+  FROM chunks c
+  JOIN documents d ON d.id = c.document_id
+ WHERE c.user_id = :user_id AND c.document_id = ANY(:document_ids)
+ ORDER BY d.created_at, d.id, c.ord
+ LIMIT :limit
+""").bindparams(bindparam("document_ids", type_=ARRAY(Integer)))
+
+
+async def scope_chunks(session: AsyncSession, user_id: int, document_ids: list[int], limit: int) -> list[Candidate]:
+    """Every chunk of the given documents, in reading order (at most `limit`)."""
+    rows = await session.execute(_SCOPE_SQL, {"user_id": user_id, "document_ids": document_ids, "limit": limit})
+    return [Candidate(**row._mapping) for row in rows]
