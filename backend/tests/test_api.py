@@ -6,10 +6,18 @@ from app.core.security import create_access_token
 PROTECTED = [
     ("GET", "/api/documents"),
     ("POST", "/api/documents"),
+    ("GET", "/api/documents/1"),
+    ("DELETE", "/api/documents/1"),
+    ("POST", "/api/documents/1/reprocess"),
+    ("GET", "/api/documents/1/file"),
+    ("GET", "/api/documents/1/events"),
     ("GET", "/api/documents/1/entities"),
     ("GET", "/api/documents/1/graph"),
-    ("POST", "/api/documents/1/chat"),
     ("GET", "/api/graph"),
+    ("POST", "/api/chat"),
+    ("GET", "/api/conversations"),
+    ("GET", "/api/conversations/1"),
+    ("DELETE", "/api/conversations/1"),
 ]
 
 

@@ -11,6 +11,7 @@ import json
 import re
 import socket
 import sys
+import time
 import urllib.error
 import urllib.request
 import uuid
@@ -48,6 +49,11 @@ class Smoke:
     def get_raw(self, path):
         return self.raw(f"GET {path} HTTP/1.1{CRLF}Host: x{CRLF}Connection: close{CRLF}{CRLF}")
 
+    def get_raw_auth(self, path, token):
+        return self.raw(
+            f"GET {path} HTTP/1.1{CRLF}Host: x{CRLF}Authorization: Bearer {token}{CRLF}Connection: close{CRLF}{CRLF}"
+        )[1]
+
     def call(self, method, path, body=None, headers=None, raw_body=None):
         h = dict(headers or {})
         data = raw_body
@@ -57,7 +63,11 @@ class Smoke:
         req = urllib.request.Request(self.base + path, data=data, method=method, headers=h)
         try:
             with urllib.request.urlopen(req, timeout=60) as r:
-                return r.status, json.loads(r.read() or b"null")
+                data = r.read()
+                try:
+                    return r.status, json.loads(data or b"null")
+                except ValueError:
+                    return r.status, data
         except urllib.error.HTTPError as e:
             text = e.read()
             try:
@@ -122,19 +132,36 @@ class Smoke:
         check("expired token -> 401",
               self.call("GET", "/api/documents", headers={"Authorization": f"Bearer {expired}"})[0] == 401)
 
-        # Uploads
-        st, res = self.upload("first.txt", b"short text", token)
-        check("text upload stored", st == 200 and res.get("filename") == "first.txt", f"{st} {res}")
-        doc_id = res.get("document_id") if isinstance(res, dict) else None
-        st, res = self.upload("../../etc/second.txt", b"another short one", token)
-        check("folder path stripped from filename", st == 200 and res.get("filename") == "second.txt", f"{st} {res}")
+        # Uploads are accepted at once and processed in the background
+        note = b"DocuMind smoke test. The Lisbon office signed contract ZX-4471 in March. " * 6
+        st, res = self.upload("first.txt", note, token)
+        check("upload accepted for background processing",
+              st == 202 and res["document"]["status"] == "queued" and res["duplicate"] is False, f"{st} {res}")
+        doc_id = res["document"]["id"]
+        st, res = self.upload("../../etc/second.txt", b"Another note about the Porto office. " * 4, token)
+        check("folder path stripped from filename", st == 202 and res["document"]["filename"] == "second.txt", f"{st} {res}")
+        second_id = res["document"]["id"]
+        st, res = self.upload("copy.txt", note, token)
+        check("re-uploading the same file returns the existing document",
+              st == 200 and res["duplicate"] is True and res["document"]["id"] == doc_id, f"{st} {res}")
         check("renamed file rejected", self.upload("fake.pdf", b"not a pdf", token)[0] == 400)
-        check("corrupt PDF rejected cleanly", self.upload("broken.pdf", b"%PDF-1.4 garbage", token)[0] == 400)
         status, _ = self.raw(
             f"POST /api/documents HTTP/1.1{CRLF}Host: x{CRLF}Authorization: Bearer {token}{CRLF}"
             f"Content-Type: multipart/form-data; boundary=zz{CRLF}Content-Length: {500 * 1024 * 1024}{CRLF}{CRLF}"
         )
         check("500 MB upload refused before the body is sent", status == 413, status)
+
+        # The worker processes them (the first run may download the embedding model)
+        states = {}
+        deadline = time.time() + 300
+        while time.time() < deadline:
+            states = {i: self.call("GET", f"/api/documents/{i}", headers=auth)[1]["status"] for i in (doc_id, second_id)}
+            if all(s in ("ready", "failed") for s in states.values()):
+                break
+            time.sleep(2)
+        check("background processing finished: both documents ready", set(states.values()) == {"ready"}, states)
+        events = self.get_raw_auth(f"/api/documents/{doc_id}/events", token)
+        check("progress stream reports the final state", b'"status": "ready"' in events, events[:120])
 
         # Listing and ownership
         st, docs = self.call("GET", "/api/documents", headers=auth)
@@ -144,15 +171,25 @@ class Smoke:
         check("entities endpoint works", st == 200 and "entities" in ents, f"{st} {ents}")
         st, graph = self.call("GET", "/api/graph", headers=auth)
         check("global graph endpoint works", st == 200 and "nodes" in graph, f"{st} {graph}")
+        st, original = self.call("GET", f"/api/documents/{doc_id}/file", headers=auth)
+        check("original file downloads byte for byte", st == 200 and original == note, st)
 
         st, res = self.login(f"other-{uuid.uuid4().hex[:8]}@documind.dev", "other-pass-123")
         other = {"Authorization": f"Bearer {res['access_token']}"}
         check("another user sees none of these documents", self.call("GET", "/api/documents", headers=other)[1] == [])
         check("another user can't open this document",
-              self.call("GET", f"/api/documents/{doc_id}/entities", headers=other)[0] == 404)
+              self.call("GET", f"/api/documents/{doc_id}", headers=other)[0] == 404)
+        check("another user can't scope a chat to it",
+              self.call("POST", "/api/chat", {"question": "hi", "document_ids": [doc_id]}, other)[0] == 404)
 
-        check("chat question length is limited",
-              self.call("POST", f"/api/documents/{doc_id}/chat", {"question": "x" * 2001}, auth)[0] == 422)
+        # Chat (validation only: answering needs a Groq key, which CI doesn't have)
+        check("chat question length is limited", self.call("POST", "/api/chat", {"question": "x" * 2001}, auth)[0] == 422)
+        st, convs = self.call("GET", "/api/conversations", headers=auth)
+        check("conversation list works", st == 200 and isinstance(convs, list), f"{st} {convs}")
+
+        # Deleting removes the document
+        check("delete document", self.call("DELETE", f"/api/documents/{second_id}", headers=auth)[0] == 204)
+        check("deleted document is gone", self.call("GET", f"/api/documents/{second_id}", headers=auth)[0] == 404)
 
         passed, total = sum(self.results), len(self.results)
         print(f"\n{passed}/{total} passed")

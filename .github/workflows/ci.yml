@@ -65,7 +65,7 @@ jobs:
         run: npm audit --omit=dev --audit-level=high
 
   migrations:
-    name: Database migrations
+    name: Migrations & integration tests
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -83,6 +83,7 @@ jobs:
           --health-retries 20
     env:
       PGPASSWORD: documind
+      FASTEMBED_CACHE_PATH: ${{ github.workspace }}/.fastembed-cache
     defaults:
       run:
         working-directory: backend
@@ -96,7 +97,13 @@ jobs:
           cache-dependency-path: backend/requirements*.txt
 
       - name: Install dependencies
-        run: pip install -r requirements.txt
+        run: pip install -r requirements-dev.txt
+
+      - name: Cache embedding and reranker models
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/.fastembed-cache
+          key: fastembed-${{ hashFiles('backend/app/core/config.py') }}
 
       - name: Fresh database - upgrade, check for drift, downgrade, upgrade again
         env:
@@ -135,6 +142,11 @@ jobs:
             "SELECT count(*) FROM documents" | grep -qx 0
           psql -h localhost -U documind -d legacy -v ON_ERROR_STOP=1 -tAc \
             "SELECT count(*) FROM pg_extension WHERE extname = 'vector'" | grep -qx 1
+
+      - name: Integration tests (ingestion queue, hybrid search, chat)
+        env:
+          TEST_DATABASE_URL: postgresql://documind:documind@localhost:5432/documind_test
+        run: pytest tests/integration
 
   stack:
     name: Docker stack smoke test

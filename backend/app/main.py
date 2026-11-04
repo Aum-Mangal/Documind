@@ -9,12 +9,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from app.api.routes import auth, documents, health
+from app.api.routes import auth, chat, documents, health
 from app.core.config import BACKEND_DIR, get_settings
 from app.db.session import engine
-from app.services import storage
+from app.ingestion.worker import worker
 from app.services.cache import close_redis
 from app.services.llm import LLMNotConfigured
+from app.services.storage import S3Storage, get_storage
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 logger = logging.getLogger("documind")
@@ -22,6 +23,11 @@ settings = get_settings()
 
 
 async def _prepare_storage() -> None:
+    storage = get_storage()
+    if not isinstance(storage, S3Storage):
+        await run_in_threadpool(storage.check)
+        logger.info("Storing uploads on disk in %s", settings.local_storage_path)
+        return
     # Object storage may still be booting under docker compose; retry briefly
     for attempt in range(1, 16):
         try:
@@ -37,9 +43,11 @@ async def _prepare_storage() -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    if settings.storage_enabled:
-        await _prepare_storage()
+    await _prepare_storage()
+    if settings.worker_enabled:
+        worker.start()
     yield
+    await worker.stop()
     await close_redis()
     await engine.dispose()
 
@@ -102,6 +110,7 @@ api = APIRouter(prefix="/api")
 api.include_router(health.router)
 api.include_router(auth.router)
 api.include_router(documents.router)
+api.include_router(chat.router)
 app.include_router(api)
 
 

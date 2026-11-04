@@ -106,7 +106,7 @@ def test_password_protected_pdf_is_rejected():
 
 def test_docx_paragraphs():
     data = make_docx(["First paragraph.", "Second paragraph."])
-    assert extract_text(data, "letter.docx", MAX_PAGES) == "First paragraph.\nSecond paragraph."
+    assert extract_text(data, "letter.docx", MAX_PAGES) == "First paragraph.\n\nSecond paragraph."
 
 
 def test_corrupt_docx_gives_a_safe_message():

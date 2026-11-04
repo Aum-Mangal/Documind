@@ -8,7 +8,9 @@ The project was built to explore how modern AI applications combine large langua
 
 * **Interactive Knowledge Graph**: Document-level and global multi-document entity co-occurrence networks powered by Cytoscape.js
 * **OCR Support**: Automatic PyMuPDF extraction with Tesseract OCR engine fallback for scanned documents and image files (`.pdf`, `.png`, `.jpg`, `.jpeg`, `.webp`, `.docx`, `.txt`)
-* **RAG Pipeline**: Sliding-window chunking (500 words with 50-word overlap), cited source snippets, and retrieval confidence scoring
+* **Background ingestion**: uploads return immediately; a crash-safe Postgres job queue (`FOR UPDATE SKIP LOCKED`, retries with backoff, stale-job recovery) extracts text page by page, OCRs only scanned pages, and embeds sentence-aware chunks into pgvector, with live progress over server-sent events
+* **Hybrid retrieval**: pgvector HNSW similarity and Postgres full-text search fused with Reciprocal Rank Fusion in a single SQL query, then reranked by a cross-encoder
+* **Grounded chat**: answers cite the document and page of each passage, decline when nothing relevant is found, and treat document text as untrusted data; conversations are saved, can span all documents or a chosen few, and follow-up questions are rewritten into standalone searches
 * **Modern React Frontend**: Clean, dark-themed UI built with React 18, Vite, Tailwind CSS, and Lucide icons
 * **PostgreSQL + pgvector**: Versioned schema with Alembic migrations, async access with SQLAlchemy 2.0 + asyncpg
 * **User Authentication**: JWT bearer tokens, bcrypt password hashing
@@ -27,7 +29,7 @@ The project was built to explore how modern AI applications combine large langua
 * **Redis** (caching and rate limiting)
 * **S3-compatible object storage** (SeaweedFS locally, Cloudflare R2 in production)
 * **Tesseract OCR** & **PyMuPDF (fitz)**
-* **FastEmbed ONNX** (`BAAI/bge-small-en-v1.5`, CPU-optimized)
+* **FastEmbed ONNX** (`BAAI/bge-small-en-v1.5` embeddings, `ms-marco-MiniLM-L-6-v2` reranker, CPU-only)
 * **Groq API** (model set by `GROQ_MODEL`, default `openai/gpt-oss-20b`)
 * **spaCy** (`en_core_web_sm` NER)
 
@@ -130,7 +132,11 @@ A database created by an older version of DocuMind can be upgraded in place with
 cd backend
 pip install -r requirements-dev.txt
 ruff check .
-pytest                      # no database or services needed
+pytest                      # unit tests: no database or services needed
+
+# integration tests against a real Postgres + pgvector (e.g. the compose one); the named
+# database is dropped and recreated
+TEST_DATABASE_URL=postgresql://documind:documind@localhost:5432/documind_test pytest tests/integration
 
 cd ../frontend
 npm run lint
@@ -147,16 +153,24 @@ GitHub Actions runs the same checks on every push, plus migrations against a rea
 
 All `/api/documents` and `/api/graph` endpoints require an `Authorization: Bearer <access_token>` header, using the token returned by `/api/auth/login`. Set `ENABLE_API_DOCS=true` to browse them at `/api/docs`.
 
-| Method | Endpoint                          | Description                                 |
-| ------ | --------------------------------- | ------------------------------------------- |
-| GET    | `/`                               | Serves the React single-page app            |
-| GET    | `/api/health`                     | Liveness check                              |
-| GET    | `/api/health/ready`               | Readiness: database, Redis, storage         |
-| POST   | `/api/auth/signup`                | Register a new account                      |
-| POST   | `/api/auth/login`                 | Authenticate and obtain a JWT               |
-| POST   | `/api/documents`                  | Upload a document or scanned image          |
-| GET    | `/api/documents`                  | List your documents                         |
-| GET    | `/api/documents/{id}/entities`    | Named entities in a document                |
-| GET    | `/api/documents/{id}/graph`       | Document entity co-occurrence graph         |
-| POST   | `/api/documents/{id}/chat`        | RAG question answering with citations       |
-| GET    | `/api/graph`                      | Cross-document entity graph                 |
+| Method | Endpoint                          | Description                                       |
+| ------ | --------------------------------- | ------------------------------------------------- |
+| GET    | `/`                               | Serves the React single-page app                  |
+| GET    | `/api/health`                     | Liveness check                                    |
+| GET    | `/api/health/ready`               | Readiness: database, Redis, storage               |
+| POST   | `/api/auth/signup`                | Register a new account                            |
+| POST   | `/api/auth/login`                 | Authenticate and obtain a JWT                     |
+| POST   | `/api/documents`                  | Upload a file; returns 202 and processes it in the background |
+| GET    | `/api/documents`                  | List your documents with processing status        |
+| GET    | `/api/documents/{id}`             | One document                                      |
+| GET    | `/api/documents/{id}/events`      | Live processing progress (server-sent events)     |
+| GET    | `/api/documents/{id}/file`        | Download the original file                        |
+| POST   | `/api/documents/{id}/reprocess`   | Process a document again                          |
+| DELETE | `/api/documents/{id}`             | Delete a document, its file and its passages      |
+| GET    | `/api/documents/{id}/entities`    | Named entities in a document                      |
+| GET    | `/api/documents/{id}/graph`       | Document entity co-occurrence graph               |
+| GET    | `/api/graph`                      | Cross-document entity graph                       |
+| POST   | `/api/chat`                       | Ask a question (new or existing conversation)     |
+| GET    | `/api/conversations`              | List saved conversations                          |
+| GET    | `/api/conversations/{id}`         | A conversation with its messages                  |
+| DELETE | `/api/conversations/{id}`         | Delete a conversation                             |

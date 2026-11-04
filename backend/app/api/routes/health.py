@@ -7,8 +7,8 @@ from sqlalchemy import text
 
 from app.api.deps import DbSession
 from app.core.config import get_settings
-from app.services import storage
 from app.services.cache import get_redis
+from app.services.storage import get_storage
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/health", tags=["Health"])
@@ -43,7 +43,7 @@ async def readiness(session: DbSession):
 
     if get_settings().storage_enabled:
         try:
-            await run_in_threadpool(storage.check)
+            await run_in_threadpool(get_storage().check)
             checks["storage"] = "ok"
         except Exception:
             logger.exception("Readiness: storage check failed")

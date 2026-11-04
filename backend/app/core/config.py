@@ -55,6 +55,29 @@ class Settings(DatabaseSettings):
     s3_secret_access_key: str | None = None
     s3_bucket: str = "documind"
     s3_region: str = "auto"
+    # Where uploads go when S3 isn't configured (relative paths are inside backend/)
+    local_storage_dir: str = "data/uploads"
+
+    # ── Ingestion worker ─────────────────────────────
+    worker_enabled: bool = True
+    # Safety-net check for queued work; the worker is normally woken by uploads directly
+    worker_idle_poll_seconds: int = 300
+    ingest_max_attempts: int = 3
+    # A job still marked processing after this long is assumed crashed and picked up again
+    ingest_stale_minutes: int = 15
+    chunk_target_tokens: int = 300
+    chunk_overlap_tokens: int = 50
+
+    # ── Retrieval ────────────────────────────────────
+    embedding_model: str = "BAAI/bge-small-en-v1.5"
+    reranker_model: str = "Xenova/ms-marco-MiniLM-L-6-v2"
+    reranker_enabled: bool = True
+    retrieval_candidates: int = 30
+    answer_sources: int = 5
+    # Reranker scores are logits: unrelated passages score about -11, paraphrased matches -6 to -4,
+    # clear matches above 0. If even the best passage scores below this, we say we can't find it.
+    min_rerank_score: float = -8.0
+    chat_history_messages: int = 6
 
     # ── LLM ──────────────────────────────────────────
     groq_api_key: str | None = None
@@ -84,6 +107,11 @@ class Settings(DatabaseSettings):
     @property
     def storage_enabled(self) -> bool:
         return bool(self.s3_endpoint_url)
+
+    @property
+    def local_storage_path(self) -> Path:
+        path = Path(self.local_storage_dir)
+        return path if path.is_absolute() else BACKEND_DIR / path
 
 
 @lru_cache

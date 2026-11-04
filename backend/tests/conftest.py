@@ -5,6 +5,7 @@ environment variables (which take priority over backend/.env), so a developer's 
 .env can't change test results or point tests at a real database.
 """
 import os
+import tempfile
 
 TEST_SECRET_KEY = "test-secret-key-0123456789-0123456789-abcdef"
 
@@ -20,6 +21,8 @@ os.environ.update({
     "ENABLE_API_DOCS": "false",
     "MAX_UPLOAD_MB": "1",
     "MAX_PDF_PAGES": "5",
+    "WORKER_ENABLED": "false",
+    "LOCAL_STORAGE_DIR": tempfile.mkdtemp(prefix="documind-test-uploads-"),
 })
 
 import pytest  # noqa: E402
