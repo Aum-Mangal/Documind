@@ -3,9 +3,13 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 
 from app.api.deps import CurrentUser, DbSession
+from app.core import rate_limit
 from app.core.config import get_settings
 from app.db.models import Conversation, Document, Message, User
 from app.retrieval.answer import answer_question
+from app.retrieval.cache import answer_cache_key, corpus_version, load_cached_answer, store_cached_answer
+from app.services.llm import track_usage
+from app.services.quotas import add_usage_event, ensure_ai_allowance
 
 settings = get_settings()
 router = APIRouter(tags=["Chat"])
@@ -73,6 +77,12 @@ async def _new_conversation(session: DbSession, user: User, question: str, docum
 
 @router.post("/chat")
 async def ask(request: AskRequest, user: CurrentUser, session: DbSession):
+    await rate_limit.enforce(
+        "chat", str(user.id), settings.chat_per_minute, 60,
+        "You're asking questions very quickly. Wait a moment and try again.",
+    )
+    await ensure_ai_allowance(session, user.id)
+
     if request.conversation_id is not None:
         conversation = await _get_owned_conversation(session, request.conversation_id, user)
     else:
@@ -84,7 +94,21 @@ async def ask(request: AskRequest, user: CurrentUser, session: DbSession):
     )).all()
     history = [{"role": r.role, "content": r.content} for r in reversed(recent)]
 
-    answer = await answer_question(session, user.id, request.question, conversation.document_ids, history)
+    # A first question (no history to resolve) can be answered from the cache
+    cache_key = None
+    answer = None
+    if not history and settings.answer_cache_seconds > 0:
+        version = await corpus_version(session, user.id, conversation.document_ids)
+        cache_key = answer_cache_key(user.id, conversation.document_ids, version, request.question)
+        answer = await load_cached_answer(cache_key)
+    cached = answer is not None
+
+    if answer is None:
+        with track_usage() as usage:
+            answer = await answer_question(session, user.id, request.question, conversation.document_ids, history)
+        add_usage_event(session, user.id, "chat", usage)
+        if cache_key:
+            await store_cached_answer(cache_key, answer)
 
     session.add(Message(conversation_id=conversation.id, role="user", content=request.question))
     reply = Message(
@@ -101,6 +125,7 @@ async def ask(request: AskRequest, user: CurrentUser, session: DbSession):
         "conversation": serialize_conversation(conversation),
         "message": serialize_message(reply),
         "search_query": answer.search_query,
+        "cached": cached,
     }
 
 

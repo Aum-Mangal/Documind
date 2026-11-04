@@ -11,6 +11,7 @@ The project was built to explore how modern AI applications combine large langua
 * **Background ingestion**: uploads return immediately; a crash-safe Postgres job queue (`FOR UPDATE SKIP LOCKED`, retries with backoff, stale-job recovery) extracts text page by page, OCRs only scanned pages, and embeds sentence-aware chunks into pgvector, with live progress over server-sent events
 * **Hybrid retrieval**: pgvector HNSW similarity and Postgres full-text search fused with Reciprocal Rank Fusion in a single SQL query, then reranked by a cross-encoder
 * **Grounded chat**: answers cite the document and page of each passage, decline when nothing relevant is found, and treat document text as untrusted data; conversations are saved, can span all documents or a chosen few, and follow-up questions are rewritten into standalone searches
+* **Limits and caching**: Redis-backed rate limits on sign-in, sign-up, chat and uploads; per-user daily AI token and storage quotas; cached query embeddings and answers (invalidated automatically when documents change); logout revokes the token. Without Redis everything falls back to in-memory, and a Redis outage fails open rather than locking users out
 * **Modern React Frontend**: Clean, dark-themed UI built with React 18, Vite, Tailwind CSS, and Lucide icons
 * **PostgreSQL + pgvector**: Versioned schema with Alembic migrations, async access with SQLAlchemy 2.0 + asyncpg
 * **User Authentication**: JWT bearer tokens, bcrypt password hashing
@@ -160,6 +161,8 @@ All `/api/documents` and `/api/graph` endpoints require an `Authorization: Beare
 | GET    | `/api/health/ready`               | Readiness: database, Redis, storage               |
 | POST   | `/api/auth/signup`                | Register a new account                            |
 | POST   | `/api/auth/login`                 | Authenticate and obtain a JWT                     |
+| POST   | `/api/auth/logout`                | Revoke the current token                          |
+| GET    | `/api/auth/me`                    | Current user and quota usage                      |
 | POST   | `/api/documents`                  | Upload a file; returns 202 and processes it in the background |
 | GET    | `/api/documents`                  | List your documents with processing status        |
 | GET    | `/api/documents/{id}`             | One document                                      |

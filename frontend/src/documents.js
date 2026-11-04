@@ -23,6 +23,12 @@ export const statusLabel = (doc) => {
 export const formatDate = (value) =>
   value ? new Date(value).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : ''
 
+export const formatBytes = (bytes) => {
+  if (bytes == null) return ''
+  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(bytes < 10 * 1024 * 1024 ? 1 : 0)} MB`
+}
+
 export const pageLabel = (start, end) => {
   if (start == null) return null
   return end == null || end === start ? `p. ${start}` : `pp. ${start}–${end}`

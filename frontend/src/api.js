@@ -87,8 +87,20 @@ export const api = {
     return res;
   },
 
-  logout() {
-    setToken(null);
+  // Revokes the token on the server, then forgets it here (even if the server is unreachable)
+  async logout() {
+    try {
+      if (getToken()) await request("/api/auth/logout", { method: "POST" });
+    } catch {
+      // the token is dropped locally either way
+    } finally {
+      setToken(null);
+    }
+  },
+
+  // The signed-in user and their quota usage
+  me() {
+    return request("/api/auth/me");
   },
 
   // Documents

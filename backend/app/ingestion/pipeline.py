@@ -11,7 +11,9 @@ from app.ingestion.chunking import chunk_pages
 from app.ingestion.progress import progress_bus
 from app.services.embeddings import embed_passages
 from app.services.extraction import Page, extract_pages
+from app.services.llm import Usage, track_usage
 from app.services.ocr import ExtractionError
+from app.services.quotas import add_usage_event, has_ai_allowance
 from app.services.storage import get_storage
 from app.services.summarizer import summarize
 
@@ -90,9 +92,14 @@ async def process_document(session_factory: async_sessionmaker[AsyncSession], do
 
     full_text = "\n\n".join(p.text for p in pages if p.text)
     summary = None
+    usage = Usage()
     if needs_summary:
-        await set_state(session_factory, doc_id, stage="summarizing", progress=90)
-        summary = await asyncio.to_thread(_summarize_or_none, full_text)
+        async with session_factory() as session:
+            allowed = await has_ai_allowance(session, user_id)
+        if allowed:  # otherwise the document is still searchable, just without a summary
+            await set_state(session_factory, doc_id, stage="summarizing", progress=90)
+            with track_usage() as usage:
+                summary = await asyncio.to_thread(_summarize_or_none, full_text)
 
     # Swap in the new chunks and mark the document ready in one transaction
     async with session_factory() as session, session.begin():
@@ -113,6 +120,7 @@ async def process_document(session_factory: async_sessionmaker[AsyncSession], do
         if summary:
             doc.summary = summary
         doc.status, doc.stage, doc.progress, doc.error, doc.locked_at = "ready", None, 100, None, None
+        add_usage_event(session, user_id, "summary", usage)
         state = document_state(doc)
 
     progress_bus.publish(doc_id, state)

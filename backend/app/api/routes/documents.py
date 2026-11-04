@@ -13,6 +13,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import defer
 
 from app.api.deps import CurrentUser, DbSession
+from app.core import rate_limit
 from app.core.config import get_settings
 from app.db.models import Document, User
 from app.db.session import SessionLocal
@@ -23,6 +24,7 @@ from app.services.extraction import clean_filename, file_extension, validate_upl
 from app.services.graph import generate_document_graph, generate_global_graph
 from app.services.ner import extract_entities
 from app.services.ocr import ExtractionError
+from app.services.quotas import ensure_storage_allowance
 from app.services.storage import get_storage
 
 logger = logging.getLogger(__name__)
@@ -79,6 +81,10 @@ async def _find_duplicate(session: DbSession, user: User, sha256: str) -> Docume
 
 @router.post("/documents", status_code=status.HTTP_202_ACCEPTED)
 async def upload_document(user: CurrentUser, session: DbSession, file: UploadFile = File(...)):
+    await rate_limit.enforce(
+        "upload", str(user.id), settings.upload_per_hour, 3600,
+        "You've uploaded a lot of files in the last hour. Try again later.",
+    )
     filename = clean_filename(file.filename)
     data = await _read_upload(file)
     try:
@@ -89,6 +95,7 @@ async def upload_document(user: CurrentUser, session: DbSession, file: UploadFil
     sha256 = hashlib.sha256(data).hexdigest()
     if existing := await _find_duplicate(session, user, sha256):
         return _duplicate_response(existing)
+    await ensure_storage_allowance(session, user.id, len(data))
 
     doc = Document(
         user_id=user.id, filename=filename, mime_type=mime_type, size_bytes=len(data),

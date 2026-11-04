@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.retrieval.search import Candidate, hybrid_search
-from app.services.embeddings import embed_query, rerank
+from app.services.embeddings import rerank
 from app.services.llm import complete
 
 logger = logging.getLogger(__name__)
@@ -105,7 +105,9 @@ async def answer_question(
     settings = get_settings()
 
     search_query = await asyncio.to_thread(rewrite_question, history, question) if history else question
-    query_vector = await asyncio.to_thread(embed_query, search_query)
+    from app.retrieval.cache import cached_query_embedding
+
+    query_vector = await cached_query_embedding(search_query)
     candidates = await hybrid_search(
         session, user_id, search_query, query_vector, document_ids, limit=settings.retrieval_candidates
     )

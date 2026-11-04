@@ -187,6 +187,15 @@ class Smoke:
         st, convs = self.call("GET", "/api/conversations", headers=auth)
         check("conversation list works", st == 200 and isinstance(convs, list), f"{st} {convs}")
 
+        # Quotas are reported; logging out revokes the token (stored in Redis)
+        st, me = self.call("GET", "/api/auth/me", headers=auth)
+        check("usage is reported", st == 200 and me["usage"]["documents"]["used"] >= 1, f"{st} {me}")
+        st, res = self.login(email, "smoke-pass-123")
+        spare = {"Authorization": f"Bearer {res['access_token']}"}
+        check("logout", self.call("POST", "/api/auth/logout", headers=spare)[0] == 204)
+        check("a logged-out token is rejected", self.call("GET", "/api/documents", headers=spare)[0] == 401)
+        check("other sessions stay signed in", self.call("GET", "/api/documents", headers=auth)[0] == 200)
+
         # Deleting removes the document
         check("delete document", self.call("DELETE", f"/api/documents/{second_id}", headers=auth)[0] == 204)
         check("deleted document is gone", self.call("GET", f"/api/documents/{second_id}", headers=auth)[0] == 404)

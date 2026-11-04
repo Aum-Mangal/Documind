@@ -66,7 +66,7 @@ def session_factory():
 def clean_tables(session_factory):
     async def truncate():
         async with session_factory() as session:
-            await session.execute(text("TRUNCATE users, documents, chunks, conversations, messages RESTART IDENTITY CASCADE"))
+            await session.execute(text("TRUNCATE users, documents, chunks, conversations, messages, usage_events RESTART IDENTITY CASCADE"))
             await session.commit()
 
     asyncio.run(truncate())
@@ -80,7 +80,10 @@ class FakeLLM:
         self.answer = "Maria Okafor was appointed chief operating officer [Source 1]."
 
     def __call__(self, system: str, user: str) -> str:
+        from app.services.llm import record_usage
+
         self.calls.append((system, user))
+        record_usage(100, 20)
         if "Rewrite the user's latest question" in system:
             return "Why was the Atlas launch delayed?"
         if "Summarize" in system:

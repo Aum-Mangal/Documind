@@ -22,6 +22,12 @@ os.environ.update({
     "MAX_UPLOAD_MB": "1",
     "MAX_PDF_PAGES": "5",
     "WORKER_ENABLED": "false",
+    # Tests sign up and log in far more often than a person would; specific tests lower these
+    "SIGNUP_PER_HOUR": "100000",
+    "LOGIN_PER_MINUTE": "100000",
+    "LOGIN_PER_EMAIL_PER_15MIN": "100000",
+    "CHAT_PER_MINUTE": "100000",
+    "UPLOAD_PER_HOUR": "100000",
     "LOCAL_STORAGE_DIR": tempfile.mkdtemp(prefix="documind-test-uploads-"),
 })
 
@@ -35,3 +41,13 @@ def client():
 
     with TestClient(app) as test_client:
         yield test_client
+
+
+@pytest.fixture(autouse=True)
+def fresh_cache():
+    """Each test starts with an empty in-memory cache (rate-limit counters, cached answers)."""
+    from app.services import cache
+
+    cache._cache = None
+    yield
+    cache._cache = None

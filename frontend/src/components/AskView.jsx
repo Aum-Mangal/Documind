@@ -61,6 +61,12 @@ export default function AskView() {
   const [scope, setScope] = useState([])
   // Remounts the chat panel when switching conversations
   const [chatKey, setChatKey] = useState('new-0')
+  const [allowance, setAllowance] = useState(null)
+
+  const refreshAllowance = useCallback(() => {
+    api.me().then(me => setAllowance(me.usage.ai_tokens_today)).catch(() => {})
+  }, [])
+  useEffect(() => { refreshAllowance() }, [refreshAllowance])
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -114,6 +120,7 @@ export default function AskView() {
 
   // The first answer in a new conversation creates it; show it in the list
   const handleConversation = (conversation) => {
+    refreshAllowance()
     setConversations(prev => [conversation, ...prev.filter(c => c.id !== conversation.id)])
     setActive(prev => (prev && prev.id === conversation.id ? prev : { ...conversation, messages: null }))
   }
@@ -125,6 +132,11 @@ export default function AskView() {
         <p className="mt-1 text-sm text-ink-muted">
           Questions across your whole library, or a few documents you choose. Every answer cites the passages it used.
         </p>
+        {allowance?.limit && (
+          <p className="mt-1 text-xs text-ink-faint">
+            AI allowance today: {Math.min(100, Math.round((100 * allowance.used) / allowance.limit))}% used · resets at midnight UTC
+          </p>
+        )}
       </div>
 
       {error && <div className="mb-4"><ErrorNotice message={error} onRetry={load} /></div>}

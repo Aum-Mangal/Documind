@@ -79,6 +79,25 @@ class Settings(DatabaseSettings):
     min_rerank_score: float = -8.0
     chat_history_messages: int = 6
 
+    # ── Rate limits (per window; 0 disables one) ─────
+    rate_limits_enabled: bool = True
+    # Behind a proxy (Hugging Face Spaces, Caddy) the client IP is in X-Forwarded-For
+    trust_proxy_headers: bool = False
+    signup_per_hour: int = 5          # per IP
+    login_per_minute: int = 20        # per IP
+    login_per_email_per_15min: int = 10
+    chat_per_minute: int = 20         # per user
+    upload_per_hour: int = 60         # per user
+
+    # ── Quotas (0 disables one) ──────────────────────
+    daily_token_quota: int = 200_000  # LLM tokens per user per UTC day
+    max_documents_per_user: int = 200
+    max_storage_mb_per_user: int = 500
+
+    # ── Caching ──────────────────────────────────────
+    answer_cache_seconds: int = 3600
+    query_embedding_cache_seconds: int = 86400
+
     # ── LLM ──────────────────────────────────────────
     groq_api_key: str | None = None
     groq_model: str = "openai/gpt-oss-20b"

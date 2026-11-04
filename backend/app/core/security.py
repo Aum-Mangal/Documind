@@ -1,3 +1,5 @@
+import uuid
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
 import bcrypt
@@ -29,19 +31,46 @@ def verify_password(plain: str, hashed: str) -> bool:
 DUMMY_HASH = hash_password("dummy-password-for-timing")
 
 
+@dataclass(frozen=True)
+class TokenClaims:
+    user_id: int
+    # Unique per token, so one token can be revoked (logout) without touching others.
+    # None for tokens issued before token IDs existed; those simply expire.
+    token_id: str | None
+    expires_at: datetime
+
+
 def create_access_token(user_id: int) -> str:
     settings = get_settings()
     now = datetime.now(UTC)
-    payload = {"sub": str(user_id), "iat": now, "exp": now + timedelta(hours=settings.access_token_ttl_hours)}
+    payload = {
+        "sub": str(user_id),
+        "jti": uuid.uuid4().hex,
+        "iat": now,
+        "exp": now + timedelta(hours=settings.access_token_ttl_hours),
+    }
     return jwt.encode(payload, settings.secret_key, algorithm=JWT_ALGORITHM)
 
 
-def decode_access_token(token: str) -> int:
-    """Returns the user id, or raises jwt.InvalidTokenError / ValueError."""
+def decode_token(token: str) -> TokenClaims:
+    """Raises jwt.InvalidTokenError / ValueError for anything that isn't a valid, unexpired token."""
     payload = jwt.decode(
         token,
         get_settings().secret_key,
         algorithms=[JWT_ALGORITHM],
         options={"require": ["exp", "sub"]},
     )
-    return int(payload["sub"])
+    return TokenClaims(
+        user_id=int(payload["sub"]),
+        token_id=payload.get("jti"),
+        expires_at=datetime.fromtimestamp(payload["exp"], UTC),
+    )
+
+
+def decode_access_token(token: str) -> int:
+    """Returns the user id, or raises jwt.InvalidTokenError / ValueError."""
+    return decode_token(token).user_id
+
+
+def revoked_token_key(token_id: str) -> str:
+    return f"revoked:{token_id}"

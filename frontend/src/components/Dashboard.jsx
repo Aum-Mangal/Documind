@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, lazy, Suspense } from 'react'
 import { Plus, Search, RefreshCw, AlertCircle, ChevronRight, Trash2, RotateCcw, X } from 'lucide-react'
 import { api } from '../api'
-import { formatDate, isProcessing, statusLabel, useProcessingWatch } from '../documents'
+import { formatBytes, formatDate, isProcessing, statusLabel, useProcessingWatch } from '../documents'
 import UploadModal from './UploadModal'
 
 // Cytoscape is large; only load it when a graph is actually shown
@@ -92,10 +92,12 @@ function Library({ onSelectDoc }) {
   const [notice, setNotice] = useState(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [isUploadOpen, setIsUploadOpen] = useState(false)
+  const [usage, setUsage] = useState(null)
 
   const loadDocs = useCallback(async ({ quiet = false } = {}) => {
     if (!quiet) setLoading(true)
     setError(null)
+    api.me().then(me => setUsage(me.usage)).catch(() => {})
     try {
       setDocs((await api.listDocuments()) || [])
     } catch (err) {
@@ -163,6 +165,9 @@ function Library({ onSelectDoc }) {
           <h1 className="font-serif text-3xl font-semibold text-ink">Library</h1>
           <p className="mt-1 text-sm text-ink-muted">
             {loading ? 'Loading…' : `${docs.length} ${docs.length === 1 ? 'document' : 'documents'}`}
+            {usage?.storage_bytes?.limit && !loading && (
+              <span className="text-ink-faint"> · {formatBytes(usage.storage_bytes.used)} of {formatBytes(usage.storage_bytes.limit)} used</span>
+            )}
           </p>
         </div>
         <div className="flex items-center gap-2">
