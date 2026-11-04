@@ -5,6 +5,7 @@ import AuthModal from './components/AuthModal'
 import Dashboard from './components/Dashboard'
 import DocumentView from './components/DocumentView'
 import AskView from './components/AskView'
+import ServerStatus from './components/ServerStatus'
 
 export default function App() {
   const [authed, setAuthed] = useState(false)
@@ -45,11 +46,17 @@ export default function App() {
   }
 
   if (!authed) {
-    return <AuthModal onAuthenticated={() => setAuthed(true)} />
+    return (
+      <>
+        <ServerStatus />
+        <AuthModal onAuthenticated={() => setAuthed(true)} />
+      </>
+    )
   }
 
   return (
     <div className="min-h-screen flex flex-col">
+      <ServerStatus />
       <Navbar
         activeTab={selectedDoc ? null : activeTab}
         onNavigate={goToLibrary}

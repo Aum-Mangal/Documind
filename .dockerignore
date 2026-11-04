@@ -1,20 +1,22 @@
-__pycache__
-*.pyc
-*.pyo
-*.pyd
-.git
-.gitignore
+# Secrets and local state never go into an image
 .env
-backend/.env
-backend/venv/
-backend/__pycache__/
-backend/services/__pycache__/
-node_modules/
-frontend/node_modules/
+**/.env
+backend/data/
 *.db
 *.sqlite
 *.sqlite3
+
+# Built or installed inside the image
+frontend/node_modules/
+frontend/dist/
+backend/venv/
+
+# Not needed at runtime
+.git
+.github/
 **/__pycache__
-frontend/src/
-frontend/public/
-backend/data/
+*.pyc
+backend/tests/
+backend/eval/results/
+infra/
+scripts/

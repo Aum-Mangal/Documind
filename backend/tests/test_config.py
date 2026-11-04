@@ -52,3 +52,27 @@ def test_derived_values():
     assert settings.max_upload_bytes == 3 * 1024 * 1024
     assert settings.storage_enabled is False
     assert _settings(s3_endpoint_url="http://s3:8333").storage_enabled is True
+
+
+def test_migrations_use_the_direct_url_when_given():
+    settings = _settings(database_url="postgresql://u:p@pooler-host/db", migration_database_url="postgresql://u:p@direct-host/db")
+    assert settings.database_url == "postgresql+asyncpg://u:p@pooler-host/db"
+    assert settings.migrations_url == "postgresql+asyncpg://u:p@direct-host/db"
+    assert _settings().migrations_url == _settings().database_url
+
+
+def test_json_log_lines_carry_the_request_id(capsys):
+    import json
+    import logging
+
+    from app.core.logging import configure_logging, request_id
+
+    configure_logging("json", "INFO")
+    token = request_id.set("req-42")
+    try:
+        logging.getLogger("documind.test").info("hello")
+    finally:
+        request_id.reset(token)
+        configure_logging("text", "INFO")
+    line = json.loads(capsys.readouterr().err.strip().splitlines()[-1])
+    assert (line["message"], line["request_id"], line["level"]) == ("hello", "req-42", "INFO")

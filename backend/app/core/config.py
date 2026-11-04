@@ -28,11 +28,18 @@ class DatabaseSettings(BaseSettings):
     model_config = SettingsConfigDict(env_file=BACKEND_DIR / ".env", extra="ignore")
 
     database_url: str
+    # Migrations need a direct connection: a transaction-mode pooler (Neon's "-pooler" host)
+    # doesn't support everything Alembic does. Falls back to DATABASE_URL.
+    migration_database_url: str | None = None
 
-    @field_validator("database_url")
+    @field_validator("database_url", "migration_database_url")
     @classmethod
-    def _use_asyncpg(cls, value: str) -> str:
-        return to_asyncpg_url(value)
+    def _use_asyncpg(cls, value: str | None) -> str | None:
+        return to_asyncpg_url(value) if value else None
+
+    @property
+    def migrations_url(self) -> str:
+        return self.migration_database_url or self.database_url
 
 
 class Settings(DatabaseSettings):
@@ -45,6 +52,18 @@ class Settings(DatabaseSettings):
     # ── Database pool ────────────────────────────────
     db_pool_size: int = 5
     db_max_overflow: int = 5
+    # Set when DATABASE_URL goes through PgBouncer in transaction mode (Neon's pooled host):
+    # prepared statements can't be cached across a pooler that swaps server connections
+    db_pgbouncer: bool = False
+    # Open a connection per use instead of keeping idle ones, so a serverless database
+    # (Neon) can scale to zero between requests. Costs a TLS handshake per session.
+    db_null_pool: bool = False
+
+    # ── Logging and errors ───────────────────────────
+    log_format: Literal["text", "json"] = "text"
+    log_level: str = "INFO"
+    sentry_dsn: str | None = None
+    sentry_traces_sample_rate: float = 0.0
 
     # ── Redis (optional) ─────────────────────────────
     redis_url: str | None = None

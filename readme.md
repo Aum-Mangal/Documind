@@ -66,7 +66,27 @@ backend/
     services/   extraction, OCR, NER, graph, RAG, LLM, storage, cache
     main.py     FastAPI app
   alembic/      database migrations
+  eval/       retrieval evaluation: corpus, labelled questions, runner, results
 docker-compose.yml   Postgres + pgvector, Redis, SeaweedFS (S3), API
+deploy/, docs/       Hugging Face Space template and deployment guide
+scripts/             smoke test and k6 load test
+```
+
+## Deployment
+
+DocuMind runs for free on Hugging Face Spaces (API and worker), Neon (Postgres + pgvector), Upstash (Redis), Cloudflare R2 (files and backups) and GitHub Pages (frontend), deployed by GitHub Actions after CI passes. The image builds the frontend and includes the embedding and reranker models, so a restarted server answers its first question without downloading anything. Step-by-step setup: [docs/deployment.md](docs/deployment.md).
+
+- Works through Neon's PgBouncer pooler (tested against PgBouncer in transaction mode), with migrations on the direct connection and an optional pool-free mode so the database can scale to zero
+- Request IDs on every log line (`X-Request-ID`), JSON logs, optional Sentry
+- Nightly `pg_dump` to R2 with 14-day retention and a monthly automated restore test
+- A "starting the server" notice while a sleeping Space wakes up
+
+### Load test
+
+`scripts/loadtest.js` (k6) with 10 concurrent users for 2 minutes against the local Docker stack on a laptop CPU, with no LLM calls: 0% errors; listing documents and conversations p95 180 ms; a cached answer p95 192 ms; a full search (query embedding, hybrid search and reranking) median 216 ms, p95 1.23 s.
+
+```bash
+docker run --rm -i -e BASE=http://host.docker.internal:8000 grafana/k6:1.8.2 run - < scripts/loadtest.js
 ```
 
 ## Running Locally
@@ -111,7 +131,7 @@ uvicorn app.main:app --reload
 
 Make sure `DATABASE_URL` in `backend/.env` points at the local database (`postgresql://documind:documind@localhost:5432/documind`) and not at a hosted one.
 
-For frontend hot-reloading: `cd frontend && npm install && npm run dev` (proxies `/api` to port 8000).
+For frontend hot-reloading: `cd frontend && npm install && npm run dev` (proxies `/api` to port 8000). To have uvicorn serve the UI itself instead, build it once with `npm run build` (the Docker image does this automatically).
 
 ### Configuration
 

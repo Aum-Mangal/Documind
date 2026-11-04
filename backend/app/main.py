@@ -11,15 +11,26 @@ from fastapi.staticfiles import StaticFiles
 
 from app.api.routes import auth, chat, documents, health
 from app.core.config import BACKEND_DIR, get_settings
+from app.core.logging import configure_logging, new_request_id, request_id
 from app.db.session import engine
 from app.ingestion.worker import worker
 from app.services.cache import close_redis
 from app.services.llm import LLMNotConfigured
 from app.services.storage import S3Storage, get_storage
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
-logger = logging.getLogger("documind")
 settings = get_settings()
+configure_logging(settings.log_format, settings.log_level)
+logger = logging.getLogger("documind")
+
+if settings.sentry_dsn:
+    import sentry_sdk
+
+    sentry_sdk.init(
+        dsn=settings.sentry_dsn,
+        environment=settings.environment,
+        traces_sample_rate=settings.sentry_traces_sample_rate,
+        send_default_pii=False,  # no emails, IPs or request bodies in error reports
+    )
 
 
 async def _prepare_storage() -> None:
@@ -71,6 +82,18 @@ app.add_middleware(
 
 # Multipart overhead on top of the file itself
 _MAX_UPLOAD_REQUEST_BYTES = settings.max_upload_bytes + 1024 * 1024
+
+
+@app.middleware("http")
+async def assign_request_id(request: Request, call_next):
+    # Every log line for this request carries the ID, and the client gets it back to quote
+    token = request_id.set(new_request_id(request.headers.get("x-request-id")))
+    try:
+        response = await call_next(request)
+        response.headers["X-Request-ID"] = request_id.get()
+        return response
+    finally:
+        request_id.reset(token)
 
 
 @app.middleware("http")

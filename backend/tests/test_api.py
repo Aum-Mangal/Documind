@@ -113,3 +113,11 @@ def test_spa_fallback_serves_the_app_for_client_side_routes(client):
         pytest.skip("frontend/dist is not built")
     response = client.get("/library/some/page")
     assert response.status_code == 200
+
+
+def test_every_response_carries_a_request_id(client):
+    generated = client.get("/api/health").headers["x-request-id"]
+    assert len(generated) == 32
+    assert client.get("/api/health", headers={"X-Request-ID": "trace-abc_123"}).headers["x-request-id"] == "trace-abc_123"
+    # Malformed IDs from outside are replaced, not echoed into logs
+    assert client.get("/api/health", headers={"X-Request-ID": "bad id\nwith newline"}).headers["x-request-id"] != "bad id\nwith newline"

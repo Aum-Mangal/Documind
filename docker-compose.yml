@@ -60,6 +60,8 @@ services:
       S3_BUCKET: documind
       S3_REGION: us-east-1
       PORT: "10000"
+      # Local development signs up test accounts often; production keeps the default of 5 an hour
+      SIGNUP_PER_HOUR: "100"
     ports:
       - "8000:10000"
     depends_on:

@@ -25,3 +25,6 @@ npm-debug.log*
 Thumbs.db
 # Local upload storage (used when S3 is not configured)
 backend/data/
+
+# Built by the Dockerfile and CI, never committed
+frontend/dist/

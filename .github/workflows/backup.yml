@@ -1,0 +1,106 @@
+name: Database backup
+
+# Nightly pg_dump of the production database to Cloudflare R2, keeping 14 days, and a monthly
+# restore into a throwaway database to prove the backups actually work.
+# Does nothing until the BACKUP_DATABASE_URL secret is set.
+on:
+  schedule:
+    - cron: "17 3 * * *"   # backup, 03:17 UTC daily
+    - cron: "41 4 2 * *"   # restore test, 04:41 UTC on the 2nd of each month
+  workflow_dispatch:
+    inputs:
+      restore_test:
+        description: Also restore the newest backup into a scratch database
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+env:
+  # pg_dump must be at least as new as the server (Neon runs PostgreSQL 17)
+  PG_IMAGE: postgres:17.11
+  BUCKET: s3://documind-backups
+  KEEP_DAYS: "14"
+  AWS_ACCESS_KEY_ID: ${{ secrets.BACKUP_S3_ACCESS_KEY_ID }}
+  AWS_SECRET_ACCESS_KEY: ${{ secrets.BACKUP_S3_SECRET_ACCESS_KEY }}
+  AWS_DEFAULT_REGION: auto
+  S3_ENDPOINT: ${{ secrets.BACKUP_S3_ENDPOINT_URL }}
+
+jobs:
+  backup:
+    if: github.event.schedule != '41 4 2 * *'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check configuration
+        id: config
+        env:
+          BACKUP_DATABASE_URL: ${{ secrets.BACKUP_DATABASE_URL }}
+        run: |
+          if [ -z "$BACKUP_DATABASE_URL" ]; then
+            echo "BACKUP_DATABASE_URL is not set; skipping." && echo "enabled=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Dump the database
+        if: steps.config.outputs.enabled == 'true'
+        env:
+          BACKUP_DATABASE_URL: ${{ secrets.BACKUP_DATABASE_URL }}
+        run: |
+          name="documind-$(date -u +%Y-%m-%dT%H%M%SZ).dump"
+          docker run --rm -e URL="$BACKUP_DATABASE_URL" "$PG_IMAGE" \
+            sh -c 'pg_dump "$URL" --format=custom --compress=9 --no-owner --no-privileges' > "$name"
+          test -s "$name"
+          echo "BACKUP_FILE=$name" >> "$GITHUB_ENV"
+          ls -lh "$name"
+
+      - name: Upload to R2 and prune old backups
+        if: steps.config.outputs.enabled == 'true'
+        run: |
+          aws --endpoint-url "$S3_ENDPOINT" s3 cp "$BACKUP_FILE" "$BUCKET/$BACKUP_FILE" --only-show-errors
+          cutoff=$(date -u -d "$KEEP_DAYS days ago" +%Y-%m-%d)
+          aws --endpoint-url "$S3_ENDPOINT" s3 ls "$BUCKET/" | while read -r day _ _ file; do
+            if [[ "$file" == documind-*.dump && "$day" < "$cutoff" ]]; then
+              aws --endpoint-url "$S3_ENDPOINT" s3 rm "$BUCKET/$file" --only-show-errors && echo "Pruned $file"
+            fi
+          done
+
+  restore-test:
+    # Runs after the backup on a manual run, and alone on the monthly schedule. A job that
+    # needs a skipped job is skipped too unless its condition says otherwise, hence !cancelled().
+    if: >-
+      !cancelled() && needs.backup.result != 'failure' &&
+      (github.event.schedule == '41 4 2 * *' || inputs.restore_test)
+    needs: [backup]
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:0.8.7-pg17
+        env:
+          POSTGRES_USER: restore
+          POSTGRES_PASSWORD: restore
+          POSTGRES_DB: restore
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U restore"
+          --health-interval 5s
+          --health-retries 20
+    steps:
+      - name: Fetch the newest backup
+        run: |
+          latest=$(aws --endpoint-url "$S3_ENDPOINT" s3 ls "$BUCKET/" | awk '{print $4}' | grep '^documind-.*\.dump$' | sort | tail -1)
+          test -n "$latest" || { echo "No backups found"; exit 1; }
+          aws --endpoint-url "$S3_ENDPOINT" s3 cp "$BUCKET/$latest" backup.dump --only-show-errors
+          echo "Restoring $latest"
+
+      - name: Restore it and check what came back
+        run: |
+          docker run --rm --network host -v "$PWD:/work" -e PGPASSWORD=restore "$PG_IMAGE" \
+            pg_restore --host localhost --username restore --dbname restore --no-owner --no-privileges --exit-on-error /work/backup.dump
+          docker run --rm --network host -e PGPASSWORD=restore "$PG_IMAGE" psql --host localhost --username restore --dbname restore \
+            -v ON_ERROR_STOP=1 -c "SELECT version_num FROM alembic_version" \
+            -c "SELECT (SELECT count(*) FROM users) AS users, (SELECT count(*) FROM documents) AS documents, (SELECT count(*) FROM chunks) AS chunks" \
+            -c "SELECT count(*) FROM chunks WHERE embedding IS NULL" | tee restore.txt
+          grep -q "rows" restore.txt
