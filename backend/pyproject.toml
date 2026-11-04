@@ -1,0 +1,24 @@
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-ra"
+
+[tool.ruff]
+line-length = 120
+target-version = "py313"
+extend-exclude = ["venv"]
+
+[tool.ruff.lint]
+# pyflakes, pycodestyle, import sorting, bugbear, pyupgrade
+select = ["F", "E", "W", "I", "B", "UP"]
+ignore = [
+    "E501",  # long lines are handled by line-length where it matters
+    "B008",  # FastAPI's Depends()/File() in argument defaults is the intended pattern
+]
+
+[tool.ruff.lint.per-file-ignores]
+"alembic/versions/*.py" = ["I001"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["app"]
+known-third-party = ["alembic"]
