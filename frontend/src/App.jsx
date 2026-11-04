@@ -1,13 +1,14 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { api, isAuthenticated, UNAUTHORIZED_EVENT } from './api'
 import Navbar from './components/Navbar'
 import AuthModal from './components/AuthModal'
 import Dashboard from './components/Dashboard'
 import DocumentView from './components/DocumentView'
+import AskView from './components/AskView'
 
 export default function App() {
   const [authed, setAuthed] = useState(false)
-  const [activeTab, setActiveTab] = useState('documents') // 'documents' | 'graph'
+  const [activeTab, setActiveTab] = useState('documents') // 'documents' | 'ask' | 'graph'
   const [selectedDoc, setSelectedDoc] = useState(null)
   const [checkingAuth, setCheckingAuth] = useState(true)
 
@@ -30,10 +31,10 @@ export default function App() {
     setSelectedDoc(null)
   }
 
-  const goToLibrary = (tab) => {
+  const goToLibrary = useCallback((tab) => {
     setSelectedDoc(null)
-    if (tab) setActiveTab(tab)
-  }
+    if (typeof tab === 'string') setActiveTab(tab)
+  }, [])
 
   if (checkingAuth) {
     return (
@@ -57,7 +58,9 @@ export default function App() {
 
       <main className="flex-1">
         {selectedDoc ? (
-          <DocumentView doc={selectedDoc} onBack={() => goToLibrary()} />
+          <DocumentView doc={selectedDoc} onBack={goToLibrary} />
+        ) : activeTab === 'ask' ? (
+          <AskView />
         ) : (
           <Dashboard activeTab={activeTab} onSelectDoc={setSelectedDoc} />
         )}

@@ -3,11 +3,19 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { ArrowUp, ChevronDown, ChevronRight } from 'lucide-react'
 import { api } from '../api'
+import { pageLabel } from '../documents'
 
-// Turn "[Source 2]" citations (models sometimes use full-width 【】 brackets) into links
-// the markdown renderer hands back to us
-const linkCitations = (text) =>
-  (text || '').replace(/[[【]\s*Source\s+(\d+)\s*[\]】](?!\()/g, '[Source $1](#source-$1)')
+// Turn citations into links the markdown renderer hands back to us. Models drift between
+// "[Source 2]", "【Source 2】", "[2]" and "[1, 3]", so accept all of them. Only numbers that
+// match a real source are linked, and existing markdown links "[x](...)" are left alone.
+const CITATION = /[[【]\s*(?:Sources?\s+)?(\d+(?:\s*(?:,|and)\s*(?:Source\s+)?\d+)*)\s*[\]】](?!\()/gi
+
+const linkCitations = (text, sourceCount) =>
+  (text || '').replace(CITATION, (match, list) => {
+    const numbers = list.match(/\d+/g).map(Number)
+    if (!numbers.every(n => n >= 1 && n <= sourceCount)) return match
+    return numbers.map(n => `[Source ${n}](#source-${n})`).join(' ')
+  })
 
 // Markdown elements styled for answers. Raw HTML in answers is never rendered.
 const markdownComponents = (onCite) => ({
@@ -30,7 +38,7 @@ const markdownComponents = (onCite) => ({
       return (
         <button
           type="button"
-          onClick={() => onCite(Number(match[1]) - 1)}
+          onClick={() => onCite(Number(match[1]))}
           className="mx-0.5 rounded bg-accent-soft px-1.5 text-[12px] font-medium text-accent hover:bg-accent/20 align-baseline"
         >
           {children}
@@ -45,35 +53,28 @@ const markdownComponents = (onCite) => ({
   }
 })
 
-const SUGGESTED_QUESTIONS = [
-  'Summarise the main points.',
-  'Who are the key people and organisations?',
-  'What conclusions does it reach?'
-]
-
 function Sources({ sources, expanded, onToggle }) {
   return (
     <div className="mt-3">
       <p className="text-xs font-medium text-ink-faint mb-1.5">Sources</p>
       <ol className="space-y-1">
-        {sources.map((src, sIdx) => {
-          const isOpen = !!expanded[sIdx]
+        {sources.map((src) => {
+          const isOpen = !!expanded[src.n]
+          const pages = pageLabel(src.page_start, src.page_end)
           return (
-            <li key={sIdx} className="rounded-md border border-line bg-paper text-sm">
+            <li key={src.n} className="rounded-md border border-line bg-paper text-sm">
               <button
-                onClick={() => onToggle(sIdx)}
+                onClick={() => onToggle(src.n)}
                 aria-expanded={isOpen}
                 className="w-full flex items-center gap-1.5 px-2.5 py-1.5 text-left text-ink-muted hover:text-ink"
               >
                 {isOpen ? <ChevronDown className="w-3.5 h-3.5 shrink-0" /> : <ChevronRight className="w-3.5 h-3.5 shrink-0" />}
-                <span className="font-medium">Source {sIdx + 1}</span>
-                {typeof src.score === 'number' && (
-                  <span className="ml-auto text-xs text-ink-faint">{Math.round(src.score * 100)}% match</span>
-                )}
+                <span className="font-medium shrink-0">Source {src.n}</span>
+                <span className="truncate text-ink-faint">· {src.filename}{pages ? `, ${pages}` : ''}</span>
               </button>
               {isOpen && (
                 <blockquote className="border-t border-line px-3 py-2 font-serif text-[15px] leading-relaxed text-ink-muted whitespace-pre-wrap break-words">
-                  {src.text || src.chunk || String(src)}
+                  {src.text}
                 </blockquote>
               )}
             </li>
@@ -84,8 +85,27 @@ function Sources({ sources, expanded, onToggle }) {
   )
 }
 
-export default function ChatBox({ docId }) {
-  const [messages, setMessages] = useState([])
+const DEFAULT_SUGGESTIONS = [
+  'Summarise the main points.',
+  'Who are the key people and organisations?',
+  'What conclusions does it reach?'
+]
+
+// A question-and-answer panel. Without conversationId the first question starts a new
+// conversation (searching documentIds, or everything); later questions continue it.
+export default function ChatBox({
+  documentIds,
+  conversationId: initialConversationId = null,
+  initialMessages = [],
+  onConversation,
+  disabled = false,
+  disabledMessage,
+  title = 'Ask about this document',
+  subtitle = 'Answers come only from the document’s text, with the passages they used.',
+  suggestions = DEFAULT_SUGGESTIONS
+}) {
+  const [messages, setMessages] = useState(initialMessages)
+  const [conversationId, setConversationId] = useState(initialConversationId)
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [expandedSources, setExpandedSources] = useState({})
@@ -97,30 +117,24 @@ export default function ChatBox({ docId }) {
     if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' })
   }, [messages, loading])
 
-  const setSourceOpen = (msgIndex, sourceIndex, open) => {
-    const key = `${msgIndex}-${sourceIndex}`
+  const setSourceOpen = (msgIndex, n, open) => {
+    const key = `${msgIndex}-${n}`
     setExpandedSources(prev => ({ ...prev, [key]: open ?? !prev[key] }))
   }
 
   const handleSend = async (questionText) => {
-    const query = (questionText || input).trim()
-    if (!query || loading) return
+    const question = (questionText || input).trim()
+    if (!question || loading || disabled) return
 
     setInput('')
-    setMessages(prev => [...prev, { role: 'user', content: query }])
+    setMessages(prev => [...prev, { role: 'user', content: question }])
     setLoading(true)
 
     try {
-      const res = await api.chatWithDocument(docId, query)
-      setMessages(prev => [
-        ...prev,
-        {
-          role: 'assistant',
-          content: res.answer,
-          sources: res.sources || [],
-          confidence: typeof res.confidence === 'number' ? res.confidence : null
-        }
-      ])
+      const res = await api.ask({ question, conversationId, documentIds })
+      setConversationId(res.conversation.id)
+      setMessages(prev => [...prev, res.message])
+      onConversation?.(res.conversation)
     } catch (err) {
       setMessages(prev => [
         ...prev,
@@ -132,18 +146,20 @@ export default function ChatBox({ docId }) {
   }
 
   return (
-    <section className="panel flex flex-col h-full overflow-hidden" aria-label="Ask about this document">
+    <section className="panel flex flex-col h-full overflow-hidden" aria-label={title}>
       <div className="px-4 py-3 border-b border-line">
-        <h2 className="font-serif text-lg font-semibold text-ink">Ask about this document</h2>
-        <p className="text-xs text-ink-faint">Answers come only from the document’s text, with the passages they used.</p>
+        <h2 className="font-serif text-lg font-semibold text-ink">{title}</h2>
+        <p className="text-xs text-ink-faint">{subtitle}</p>
       </div>
 
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-5" aria-live="polite">
-        {messages.length === 0 ? (
+        {disabled ? (
+          <p className="pt-2 text-sm text-ink-muted">{disabledMessage}</p>
+        ) : messages.length === 0 ? (
           <div className="pt-2">
             <p className="text-sm text-ink-muted mb-3">Try one of these, or ask your own question:</p>
             <ul className="space-y-1.5">
-              {SUGGESTED_QUESTIONS.map(q => (
+              {suggestions.map(q => (
                 <li key={q}>
                   <button
                     onClick={() => handleSend(q)}
@@ -167,25 +183,25 @@ export default function ChatBox({ docId }) {
               <p key={idx} role="alert" className="rounded-md border border-danger/30 bg-danger-soft px-3 py-2 text-sm text-danger">
                 {msg.content}
               </p>
+            ) : msg.abstained ? (
+              <p key={idx} className="text-[15px] text-ink-muted italic">
+                {msg.content} Try rephrasing, or check that the right documents are included.
+              </p>
             ) : (
               <div key={idx} className="text-[15px] leading-relaxed text-ink break-words">
                 <ReactMarkdown
                   remarkPlugins={[remarkGfm]}
-                  components={markdownComponents((sIdx) => setSourceOpen(idx, sIdx, true))}
+                  components={markdownComponents((n) => setSourceOpen(idx, n, true))}
                 >
-                  {linkCitations(msg.content)}
+                  {linkCitations(msg.content, msg.sources?.length || 0)}
                 </ReactMarkdown>
 
                 {msg.sources?.length > 0 && (
                   <Sources
                     sources={msg.sources}
-                    expanded={Object.fromEntries(msg.sources.map((_, s) => [s, expandedSources[`${idx}-${s}`]]))}
-                    onToggle={(sIdx) => setSourceOpen(idx, sIdx)}
+                    expanded={Object.fromEntries(msg.sources.map(s => [s.n, expandedSources[`${idx}-${s.n}`]]))}
+                    onToggle={(n) => setSourceOpen(idx, n)}
                   />
-                )}
-
-                {msg.confidence != null && (
-                  <p className="mt-2 text-xs text-ink-faint">Best passage match: {msg.confidence}%</p>
                 )}
               </div>
             )
@@ -195,7 +211,7 @@ export default function ChatBox({ docId }) {
         {loading && (
           <p className="flex items-center gap-2 text-sm text-ink-muted">
             <span className="spinner w-4 h-4" />
-            Reading the relevant passages…
+            Searching and reading the relevant passages…
           </p>
         )}
       </div>
@@ -212,14 +228,14 @@ export default function ChatBox({ docId }) {
           }}
           rows={1}
           placeholder="Ask a question…"
-          aria-label="Ask a question about this document"
+          aria-label={title}
           maxLength={2000}
-          disabled={loading}
+          disabled={loading || disabled}
           className="input resize-none max-h-32"
         />
         <button
           type="submit"
-          disabled={!input.trim() || loading}
+          disabled={!input.trim() || loading || disabled}
           aria-label="Send question"
           className="btn-primary p-2.5 shrink-0"
         >

@@ -3,6 +3,7 @@ import { LogOut } from 'lucide-react'
 
 const TABS = [
   { id: 'documents', label: 'Library' },
+  { id: 'ask', label: 'Ask' },
   { id: 'graph', label: 'Knowledge graph' }
 ]
 

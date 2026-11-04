@@ -3,7 +3,6 @@ import { UploadCloud, X, FileText, AlertCircle } from 'lucide-react'
 import { api } from '../api'
 
 const ACCEPTED = '.pdf,.docx,.txt,.png,.jpg,.jpeg,.webp'
-const IMAGE_PATTERN = /\.(png|jpe?g|webp)$/i
 
 export default function UploadModal({ isOpen, onClose, onUploadSuccess }) {
   const [dragActive, setDragActive] = useState(false)
@@ -59,8 +58,7 @@ export default function UploadModal({ isOpen, onClose, onUploadSuccess }) {
     setUploading(true)
     setError(null)
     try {
-      await api.uploadDocument(file)
-      onUploadSuccess()
+      onUploadSuccess(await api.uploadDocument(file))
       onClose()
     } catch (err) {
       setError(err.message || 'Upload failed. Please try again.')
@@ -69,7 +67,6 @@ export default function UploadModal({ isOpen, onClose, onUploadSuccess }) {
     }
   }
 
-  const isImage = file && IMAGE_PATTERN.test(file.name)
 
   return (
     <div
@@ -139,7 +136,7 @@ export default function UploadModal({ isOpen, onClose, onUploadSuccess }) {
           {uploading && (
             <p className="mt-4 flex items-center gap-2 text-sm text-ink-muted" aria-live="polite">
               <span className="spinner w-4 h-4" />
-              {isImage ? 'Reading text from the image…' : 'Extracting text and writing a summary…'} This can take a minute for long files.
+              Uploading… You can follow processing in your library.
             </p>
           )}
 
