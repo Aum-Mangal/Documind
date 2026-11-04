@@ -148,6 +148,33 @@ python scripts/smoke_test.py --base http://127.0.0.1:8000 --secret-key "<SECRET_
 
 GitHub Actions runs the same checks on every push, plus migrations against a real Postgres + pgvector database (including upgrading a database created by the old schema) and a smoke test of the full Docker stack.
 
+## Evaluation
+
+`backend/eval` measures retrieval on a **synthetic** corpus: 6 fictional company documents (25 PDF pages) with 66 labelled questions (lookups, paraphrases, exact codes and numbers, cross-document distractors) and 8 unanswerable ones. The PDFs go through the real ingestion pipeline, and a hit is a retrieved passage from the right document containing the labelled evidence phrase.
+
+| Mode | Recall@1 | Recall@5 | MRR@10 | p50 latency |
+|---|---|---|---|---|
+| vector | 82% | 98% | 0.894 | 8 ms |
+| keyword | 67% | 96% | 0.802 | 7 ms |
+| hybrid | 82% | 98% | 0.896 | 7 ms |
+| hybrid+rerank | 89% | 98% | 0.936 | 324 ms |
+
+End to end with the LLM (`openai/gpt-oss-20b`): 97% of answerable questions answered, 100% of those citing a passage that contains the evidence, and 100% of unanswerable questions declined. The reranker threshold only declines clearly unrelated questions; near-misses ("revenue in Q2 2025" when the report covers Q3 2026) are declined by the model, which is told to answer only from the sources.
+
+What the evaluation changed:
+- Keyword search required every term of a question to match, which natural questions rarely do: keyword-only recall@5 was 30%. Matching any term, ranked by `ts_rank_cd`, raised it to 96%.
+- With keyword search now strong, equal-weight fusion let its less precise top hits displace better vector hits (hybrid recall@1 fell from 83% to 73%); a keyword weight of 0.5 in Reciprocal Rank Fusion restored it.
+- Reranking the top 10 candidates instead of 30 gave identical quality at about 40% lower latency.
+- The abstention threshold was chosen from a sweep over the same scores (see `eval/results/end-to-end.md`).
+
+This corpus is small enough that vector search alone already performs well; treat the numbers as a regression baseline, not a benchmark. CI runs the retrieval part on every push and fails if hybrid+rerank recall@5 drops below 0.95 or MRR below 0.90.
+
+```bash
+cd backend
+python -m eval.run --database-url postgresql://documind:documind@localhost:5432/documind_eval            # retrieval only, no LLM
+python -m eval.run --database-url postgresql://documind:documind@localhost:5432/documind_eval --with-llm # also end to end (~110k Groq tokens)
+```
+
 ---
 
 ## API Endpoints

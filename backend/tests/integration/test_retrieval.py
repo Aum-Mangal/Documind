@@ -116,3 +116,18 @@ def test_cannot_scope_a_conversation_to_someone_elses_document(api, library):
     response = api.post("/api/chat", headers=library["alice"],
                         json={"question": "What does Bob's note say?", "document_ids": [library["bobs"]]})
     assert response.status_code == 404
+
+
+def test_search_modes_used_by_the_evaluation(library, session_factory):
+    async def go(mode, query):
+        async with session_factory() as session:
+            return await hybrid_search(session, 1, query, embed_query(query), None, limit=10, mode=mode)
+
+    keyword = run(go("keyword", "ZX-4471"))
+    assert keyword and all(r.vector_rank is None for r in keyword)
+    vector = run(go("vector", "ZX-4471"))
+    assert vector and all(r.keyword_rank is None for r in vector)
+    # Keyword search matches any of the question's terms, not only passages containing all of them
+    assert run(go("keyword", "Who was made chief operating officer at the quarterly board meeting?"))
+    with pytest.raises(ValueError):
+        run(go("semantic", "x"))

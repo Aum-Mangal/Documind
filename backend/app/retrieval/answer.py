@@ -90,6 +90,7 @@ def _select(question: str, candidates: list[Candidate]) -> list[tuple[Candidate,
     settings = get_settings()
     if not settings.reranker_enabled:
         return [(c, None) for c in candidates[: settings.answer_sources]]
+    candidates = candidates[: settings.rerank_candidates]
     scores = rerank(question, [c.content for c in candidates])
     ranked = sorted(zip(candidates, scores, strict=True), key=lambda pair: pair[1], reverse=True)
     return ranked[: settings.answer_sources]

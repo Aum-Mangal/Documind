@@ -155,6 +155,18 @@ jobs:
           TEST_DATABASE_URL: postgresql://documind:documind@localhost:5432/documind_test
         run: pytest tests/integration
 
+      - name: Retrieval evaluation (fails if quality drops)
+        run: |
+          python -m eval.run --database-url postgresql://documind:documind@localhost:5432/documind_eval             --min-recall-at-5 0.95 --min-mrr 0.90
+          cat eval/results/latest.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload evaluation report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: retrieval-evaluation
+          path: backend/eval/results/latest.*
+
   stack:
     name: Docker stack smoke test
     runs-on: ubuntu-latest

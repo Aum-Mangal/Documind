@@ -73,10 +73,16 @@ class Settings(DatabaseSettings):
     reranker_model: str = "Xenova/ms-marco-MiniLM-L-6-v2"
     reranker_enabled: bool = True
     retrieval_candidates: int = 30
+    # Weight of the keyword ranking in Reciprocal Rank Fusion (the vector ranking has weight 1)
+    rrf_keyword_weight: float = 0.5
+    # How many of the fused results the cross-encoder rescores (its cost grows linearly)
+    rerank_candidates: int = 10
     answer_sources: int = 5
     # Reranker scores are logits: unrelated passages score about -11, paraphrased matches -6 to -4,
-    # clear matches above 0. If even the best passage scores below this, we say we can't find it.
-    min_rerank_score: float = -8.0
+    # clear matches above 0. If even the best passage scores below this, we say we can't find it
+    # without calling the LLM. Chosen from the threshold sweep in eval/results/latest.md; near-miss
+    # questions are left for the LLM, which is told to decline when the sources lack the answer.
+    min_rerank_score: float = -9.0
     chat_history_messages: int = 6
 
     # ── Rate limits (per window; 0 disables one) ─────

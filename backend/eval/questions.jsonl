@@ -1,0 +1,74 @@
+{"id": "board-01", "type": "lookup", "question": "What was group revenue in the third quarter of 2026?", "doc": "q3-board-report", "page": 1, "evidence": "Group revenue for the quarter was 48.6 million euros"}
+{"id": "board-02", "type": "paraphrase", "question": "How much did sales grow compared with a year ago?", "doc": "q3-board-report", "page": 1, "evidence": "an increase of 14 percent on the same quarter last year"}
+{"id": "board-03", "type": "numeric", "question": "What was the gross margin this quarter?", "doc": "q3-board-report", "page": 1, "evidence": "Gross margin improved to 41.2 percent"}
+{"id": "board-04", "type": "lookup", "question": "Is the revolving credit facility being used?", "doc": "q3-board-report", "page": 1, "evidence": "the revolving credit facility of 15 million euros remains undrawn"}
+{"id": "board-05", "type": "lookup", "question": "Which office performed best in the quarter?", "doc": "q3-board-report", "page": 2, "evidence": "The Lisbon office was the strongest performer"}
+{"id": "board-06", "type": "exact", "question": "What did the Marisol Transportes deal involve?", "doc": "q3-board-report", "page": 2, "evidence": "three-year agreement with the logistics group Marisol Transportes"}
+{"id": "board-07", "type": "paraphrase", "question": "Why did Madrid miss its growth target?", "doc": "q3-board-report", "page": 2, "evidence": "two public-sector tenders being postponed into the fourth quarter"}
+{"id": "board-08", "type": "lookup", "question": "Who is running the new Porto office?", "doc": "q3-board-report", "page": 2, "evidence": "Daniel Weiss, previously head of customer engineering in Lisbon, will lead the Porto office"}
+{"id": "board-09", "type": "paraphrase", "question": "Who is the new COO?", "doc": "q3-board-report", "page": 4, "evidence": "The board appointed Maria Okafor as chief operating officer"}
+{"id": "board-10", "type": "lookup", "question": "Who is Maria Okafor replacing, and what happens to him?", "doc": "q3-board-report", "page": 4, "evidence": "She succeeds Pieter Lindqvist, who will retire at the end of the year"}
+{"id": "board-11", "type": "exact", "question": "Which firm was appointed as external auditor for 2026?", "doc": "q3-board-report", "page": 4, "evidence": "Brandt & Moreira as external auditors"}
+{"id": "board-12", "type": "paraphrase", "question": "How quickly does support now reply to customers?", "doc": "q3-board-report", "page": 3, "evidence": "The median first response time fell from 3 hours 40 minutes to 1 hour 55 minutes"}
+{"id": "board-13", "type": "lookup", "question": "What revenue is expected for the fourth quarter?", "doc": "q3-board-report", "page": 5, "evidence": "fourth-quarter revenue of between 50 and 52 million euros"}
+{"id": "board-14", "type": "numeric", "question": "How large is the proposed 2027 capital expenditure budget?", "doc": "q3-board-report", "page": 5, "evidence": "capital expenditure budget of 3.8 million euros for 2027"}
+{"id": "board-15", "type": "paraphrase", "question": "How many employees left over the past year?", "doc": "q3-board-report", "page": 3, "evidence": "Staff turnover for the trailing twelve months was 11 percent"}
+{"id": "vendor-01", "type": "distractor", "question": "What caused Northwind's on-time delivery to fall?", "doc": "northwind-vendor-review", "page": 2, "evidence": "a fire at the Gdansk plant on 9 July 2026"}
+{"id": "vendor-02", "type": "numeric", "question": "What percentage of orders did Northwind deliver on time in Q3?", "doc": "northwind-vendor-review", "page": 2, "evidence": "Northwind delivered 71 percent of orders on time"}
+{"id": "vendor-03", "type": "lookup", "question": "What was the defect rate on Northwind boards?", "doc": "northwind-vendor-review", "page": 2, "evidence": "The defect rate on delivered boards was 0.4 percent"}
+{"id": "vendor-04", "type": "distractor", "question": "Where will Atlas boards be produced from December?", "doc": "northwind-vendor-review", "page": 3, "evidence": "Northwind will move Atlas board production to its Brno facility by December 2026"}
+{"id": "vendor-05", "type": "lookup", "question": "Who is leading the qualification of the backup supplier?", "doc": "northwind-vendor-review", "page": 3, "evidence": "Procurement lead Ines Varga owns the qualification"}
+{"id": "vendor-06", "type": "exact", "question": "Which company is being qualified as a second supplier?", "doc": "northwind-vendor-review", "page": 3, "evidence": "qualify a second supplier, Kestrel Components"}
+{"id": "vendor-07", "type": "lookup", "question": "What does qualifying Kestrel involve?", "doc": "northwind-vendor-review", "page": 3, "evidence": "a factory audit, a trial batch of 500 boards and a reliability test of 1,000 hours"}
+{"id": "vendor-08", "type": "lookup", "question": "When does the Northwind supply agreement end?", "doc": "northwind-vendor-review", "page": 4, "evidence": "The current master supply agreement runs until March 2027"}
+{"id": "vendor-09", "type": "paraphrase", "question": "What happens if Northwind is late with an order?", "doc": "northwind-vendor-review", "page": 4, "evidence": "A late-delivery penalty of 2 percent of order value"}
+{"id": "vendor-10", "type": "paraphrase", "question": "Why was Northwind not charged penalties for the fire delays?", "doc": "northwind-vendor-review", "page": 4, "evidence": "waived for orders affected by the Gdansk fire under the force majeure clause"}
+{"id": "vendor-11", "type": "lookup", "question": "What does procurement recommend about renewing with Northwind?", "doc": "northwind-vendor-review", "page": 4, "evidence": "renew the agreement for one year only"}
+{"id": "vendor-12", "type": "exact", "question": "Who is Northwind's account manager during the transition?", "doc": "northwind-vendor-review", "page": 3, "evidence": "A dedicated account manager, Tomasz Wrona"}
+{"id": "hr-01", "type": "lookup", "question": "How many days a week do hybrid employees need to be in the office?", "doc": "employee-handbook", "page": 2, "evidence": "in the office on at least two days a week"}
+{"id": "hr-02", "type": "paraphrase", "question": "Can I work from home for a few weeks while visiting family?", "doc": "employee-handbook", "page": 2, "evidence": "You may work fully remotely for up to 20 working days a year"}
+{"id": "hr-03", "type": "lookup", "question": "What is needed to work from another country?", "doc": "employee-handbook", "page": 2, "evidence": "requires approval from the People team at least four weeks in advance"}
+{"id": "hr-04", "type": "numeric", "question": "How much is the home office allowance?", "doc": "employee-handbook", "page": 2, "evidence": "a one-off home office allowance of 400 euros"}
+{"id": "hr-05", "type": "lookup", "question": "What are the core working hours?", "doc": "employee-handbook", "page": 3, "evidence": "Core hours are 10:00 to 16:00 local time"}
+{"id": "hr-06", "type": "paraphrase", "question": "How am I compensated for working extra hours?", "doc": "employee-handbook", "page": 3, "evidence": "compensated with time off in lieu at one and a half hours for each hour worked"}
+{"id": "hr-07", "type": "numeric", "question": "What is the on-call allowance?", "doc": "employee-handbook", "page": 3, "evidence": "an on-call allowance of 120 euros per week on call"}
+{"id": "hr-08", "type": "lookup", "question": "How many days of annual leave do full-time employees get?", "doc": "employee-handbook", "page": 4, "evidence": "Full-time employees receive 25 days of paid annual leave"}
+{"id": "hr-09", "type": "paraphrase", "question": "Can unused holiday be moved into next year?", "doc": "employee-handbook", "page": 4, "evidence": "Up to five unused days can be carried over to the following year"}
+{"id": "hr-10", "type": "lookup", "question": "How long is parental leave pay topped up?", "doc": "employee-handbook", "page": 4, "evidence": "tops up pay to 100 percent of salary for the first 16 weeks"}
+{"id": "hr-11", "type": "paraphrase", "question": "When do I need a doctor's note for being sick?", "doc": "employee-handbook", "page": 5, "evidence": "from the fourth day a certificate from a doctor is required"}
+{"id": "hr-12", "type": "lookup", "question": "How many days of sick leave are paid in full?", "doc": "employee-handbook", "page": 5, "evidence": "pays full salary for up to 30 days of sickness absence per year"}
+{"id": "hr-13", "type": "paraphrase", "question": "Is there any mental health support available?", "doc": "employee-handbook", "page": 5, "evidence": "The employee assistance programme offers free, confidential counselling"}
+{"id": "spec-01", "type": "exact", "question": "What is ZX-4471?", "doc": "atlas-x2-specification", "page": 1, "evidence": "hardware revision C, part number ZX-4471"}
+{"id": "spec-02", "type": "exact", "question": "Can customers buy part ZX-4470?", "doc": "atlas-x2-specification", "page": 1, "evidence": "Revision B units, part number ZX-4470, were used only in field trials and are not sold"}
+{"id": "spec-03", "type": "numeric", "question": "What supply voltage does the Atlas X2 accept?", "doc": "atlas-x2-specification", "page": 2, "evidence": "accepted range 18 to 32 V DC"}
+{"id": "spec-04", "type": "paraphrase", "question": "Will the controller survive a freezing warehouse?", "doc": "atlas-x2-specification", "page": 2, "evidence": "Operating temperature: minus 20 to plus 60 degrees Celsius"}
+{"id": "spec-05", "type": "exact", "question": "Which kit is needed for IP65 protection?", "doc": "atlas-x2-specification", "page": 2, "evidence": "IP65 when fitted with the sealed connector kit, part number ZX-4471-SK"}
+{"id": "spec-06", "type": "numeric", "question": "What is the MTBF of the Atlas X2?", "doc": "atlas-x2-specification", "page": 2, "evidence": "Mean time between failures: 180,000 hours"}
+{"id": "spec-07", "type": "lookup", "question": "How many digital inputs and outputs does the Atlas X2 have?", "doc": "atlas-x2-specification", "page": 3, "evidence": "32 digital inputs, 24 digital outputs and 8 analogue inputs"}
+{"id": "spec-08", "type": "paraphrase", "question": "How fast does the network switch over if a cable is cut?", "doc": "atlas-x2-specification", "page": 3, "evidence": "a failover time of under 50 milliseconds"}
+{"id": "spec-09", "type": "exact", "question": "Does the Atlas X2 support OPC UA?", "doc": "atlas-x2-specification", "page": 3, "evidence": "Supported protocols are Modbus TCP, OPC UA and MQTT"}
+{"id": "spec-10", "type": "lookup", "question": "How long is the Atlas X2 warranty?", "doc": "atlas-x2-specification", "page": 4, "evidence": "a three-year warranty from the date of delivery"}
+{"id": "spec-11", "type": "lookup", "question": "Which software is used to program the controller?", "doc": "atlas-x2-specification", "page": 4, "evidence": "using the free Atlas Studio software, version 5.2 or later"}
+{"id": "inc-01", "type": "lookup", "question": "How long were card payments down on 14 March?", "doc": "payments-outage-postmortem", "page": 1, "evidence": "for 2 hours and 47 minutes"}
+{"id": "inc-02", "type": "numeric", "question": "How many payment attempts failed during the outage?", "doc": "payments-outage-postmortem", "page": 1, "evidence": "1,318 payment attempts failed"}
+{"id": "inc-03", "type": "paraphrase", "question": "What was the underlying cause of the payments outage?", "doc": "payments-outage-postmortem", "page": 3, "evidence": "The root cause was an incomplete certificate chain"}
+{"id": "inc-04", "type": "lookup", "question": "Why did the monitoring not catch the outage?", "doc": "payments-outage-postmortem", "page": 2, "evidence": "the alert threshold was set to 50 percent over ten minutes"}
+{"id": "inc-05", "type": "lookup", "question": "Who was the on-call engineer during the incident?", "doc": "payments-outage-postmortem", "page": 2, "evidence": "The on-call engineer, Ricardo Alves"}
+{"id": "inc-06", "type": "lookup", "question": "What is the new payment error alert threshold?", "doc": "payments-outage-postmortem", "page": 4, "evidence": "Lower the payment error-rate alert to 5 percent over five minutes"}
+{"id": "inc-07", "type": "paraphrase", "question": "Were customers charged late fees because of the outage?", "doc": "payments-outage-postmortem", "page": 4, "evidence": "Late-payment fees for invoices due on 14 March were waived"}
+{"id": "inc-08", "type": "exact", "question": "What severity was the 14 March incident?", "doc": "payments-outage-postmortem", "page": 1, "evidence": "Severity was rated SEV-2"}
+{"id": "lease-01", "type": "distractor", "question": "What is the monthly rent for the Lisbon office?", "doc": "lisbon-office-lease", "page": 2, "evidence": "Rent is 52,000 euros per month, excluding VAT"}
+{"id": "lease-02", "type": "paraphrase", "question": "Can we get out of the Lisbon lease early?", "doc": "lisbon-office-lease", "page": 2, "evidence": "may end the lease early at the end of year five"}
+{"id": "lease-03", "type": "lookup", "question": "How much can the Lisbon rent go up each year?", "doc": "lisbon-office-lease", "page": 2, "evidence": "with a cap of 4 percent per year"}
+{"id": "lease-04", "type": "lookup", "question": "How big is the Lisbon office?", "doc": "lisbon-office-lease", "page": 1, "evidence": "a total of 2,150 square metres"}
+{"id": "lease-05", "type": "paraphrase", "question": "Who has to fix the air conditioning at the Lisbon office?", "doc": "lisbon-office-lease", "page": 3, "evidence": "The landlord is responsible for the structure, the roof and the building's central heating and air conditioning plant"}
+{"id": "lease-06", "type": "lookup", "question": "Can part of the Lisbon office be sublet?", "doc": "lisbon-office-lease", "page": 3, "evidence": "Subletting up to 25 percent of the space is allowed"}
+{"id": "lease-07", "type": "exact", "question": "Who is the landlord of Avenida da Liberdade 212?", "doc": "lisbon-office-lease", "page": 1, "evidence": "the landlord, Liberdade Imobiliária S.A."}
+{"id": "none-01", "type": "unanswerable", "question": "What is the capital of Mongolia?"}
+{"id": "none-02", "type": "unanswerable", "question": "How do I reset my password on the billing portal?"}
+{"id": "none-03", "type": "unanswerable", "question": "What was revenue in the second quarter of 2025?"}
+{"id": "none-04", "type": "unanswerable", "question": "How many vacation days do contractors get?"}
+{"id": "none-05", "type": "unanswerable", "question": "What is the recipe for sourdough bread?"}
+{"id": "none-06", "type": "unanswerable", "question": "Who won the football match last Sunday?"}
+{"id": "none-07", "type": "unanswerable", "question": "What is the battery life of the Atlas X2 on a single charge?"}
+{"id": "none-08", "type": "unanswerable", "question": "What are the opening hours of the Madrid office canteen?"}

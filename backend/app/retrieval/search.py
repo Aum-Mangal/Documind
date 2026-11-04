@@ -13,6 +13,7 @@ from sqlalchemy import Integer, bindparam, text
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import get_settings
 from app.db.models import EMBEDDING_DIM
 
 # The usual RRF constant; it damps the advantage of the very top ranks
@@ -22,15 +23,21 @@ _HYBRID_SQL = text("""
 WITH vector_hits AS (
     SELECT id, row_number() OVER (ORDER BY embedding <=> :query_vector) AS rank
       FROM chunks
-     WHERE user_id = :user_id
+     WHERE :use_vector
+       AND user_id = :user_id
        AND (CAST(:document_ids AS integer[]) IS NULL OR document_id = ANY(:document_ids))
      ORDER BY embedding <=> :query_vector
      LIMIT :limit
 ),
 keyword_hits AS (
     SELECT c.id, row_number() OVER (ORDER BY ts_rank_cd(c.tsv, q.query) DESC) AS rank
-      FROM chunks c, websearch_to_tsquery('english', :query_text) AS q(query)
-     WHERE c.user_id = :user_id
+      FROM chunks c,
+           -- Match ANY of the question's terms (plainto_tsquery would require all of them, which a
+           -- natural-language question almost never satisfies); ts_rank_cd still favours passages
+           -- that contain more of them, close together
+           to_tsquery('english', replace(plainto_tsquery('english', :query_text)::text, ' & ', ' | ')) AS q(query)
+     WHERE :use_keyword
+       AND c.user_id = :user_id
        AND (CAST(:document_ids AS integer[]) IS NULL OR c.document_id = ANY(:document_ids))
        AND c.tsv @@ q.query
      ORDER BY ts_rank_cd(c.tsv, q.query) DESC
@@ -38,7 +45,7 @@ keyword_hits AS (
 ),
 fused AS (
     SELECT id,
-           sum(1.0 / (:rrf_k + rank)) AS rrf,
+           sum(CASE WHEN source = 'keyword' THEN :keyword_weight ELSE 1.0 END / (:rrf_k + rank)) AS rrf,
            min(rank) FILTER (WHERE source = 'vector') AS vector_rank,
            min(rank) FILTER (WHERE source = 'keyword') AS keyword_rank
       FROM (SELECT id, rank, 'vector' AS source FROM vector_hits
@@ -79,7 +86,11 @@ async def hybrid_search(
     query_vector: np.ndarray,
     document_ids: list[int] | None = None,
     limit: int = 30,
+    mode: str = "hybrid",
 ) -> list[Candidate]:
+    """mode: 'hybrid' (both, fused), or 'vector' / 'keyword' alone, for evaluation."""
+    if mode not in ("hybrid", "vector", "keyword"):
+        raise ValueError(f"Unknown search mode: {mode}")
     # With a per-user filter, a plain HNSW scan can return too few rows; pgvector 0.8's
     # iterative scan keeps searching until the filter is satisfied. (A custom setting, so
     # older pgvector versions simply ignore it.)
@@ -91,5 +102,8 @@ async def hybrid_search(
         "document_ids": document_ids,
         "limit": limit,
         "rrf_k": RRF_K,
+        "keyword_weight": get_settings().rrf_keyword_weight,
+        "use_vector": mode != "keyword",
+        "use_keyword": mode != "vector",
     })
     return [Candidate(**row._mapping) for row in rows]
