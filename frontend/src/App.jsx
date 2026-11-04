@@ -30,10 +30,15 @@ export default function App() {
     setSelectedDoc(null)
   }
 
+  const goToLibrary = (tab) => {
+    setSelectedDoc(null)
+    if (tab) setActiveTab(tab)
+  }
+
   if (checkingAuth) {
     return (
-      <div className="min-h-screen bg-[#0B0F19] flex items-center justify-center">
-        <span className="animate-spin w-8 h-8 border-3 border-blue-500 border-t-transparent rounded-full" />
+      <div className="min-h-screen flex items-center justify-center">
+        <span className="spinner w-6 h-6" aria-label="Loading" />
       </div>
     )
   }
@@ -43,26 +48,18 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-[#0B0F19] text-gray-100 flex flex-col font-['Plus_Jakarta_Sans',sans-serif]">
+    <div className="min-h-screen flex flex-col">
       <Navbar
-        activeTab={activeTab}
-        setActiveTab={setActiveTab}
+        activeTab={selectedDoc ? null : activeTab}
+        onNavigate={goToLibrary}
         onLogout={handleLogout}
-        currentDoc={selectedDoc}
-        onBackToDashboard={() => setSelectedDoc(null)}
       />
 
-      <main className="flex-1 overflow-x-hidden">
+      <main className="flex-1">
         {selectedDoc ? (
-          <DocumentView
-            doc={selectedDoc}
-            onBack={() => setSelectedDoc(null)}
-          />
+          <DocumentView doc={selectedDoc} onBack={() => goToLibrary()} />
         ) : (
-          <Dashboard
-            activeTab={activeTab}
-            onSelectDoc={(doc) => setSelectedDoc(doc)}
-          />
+          <Dashboard activeTab={activeTab} onSelectDoc={setSelectedDoc} />
         )}
       </main>
     </div>

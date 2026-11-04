@@ -1,239 +1,231 @@
 import React, { useState, useRef, useEffect } from 'react'
-import { Send, Bot, User, Sparkles, ChevronDown, ChevronUp, BookOpen, CheckCircle, ShieldCheck } from 'lucide-react'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
+import { ArrowUp, ChevronDown, ChevronRight } from 'lucide-react'
 import { api } from '../api'
 
-export default function ChatBox({ docId, docFilename }) {
+// Turn "[Source 2]" citations (models sometimes use full-width 【】 brackets) into links
+// the markdown renderer hands back to us
+const linkCitations = (text) =>
+  (text || '').replace(/[[【]\s*Source\s+(\d+)\s*[\]】](?!\()/g, '[Source $1](#source-$1)')
+
+// Markdown elements styled for answers. Raw HTML in answers is never rendered.
+const markdownComponents = (onCite) => ({
+  p: ({ children }) => <p className="mb-3 last:mb-0">{children}</p>,
+  ul: ({ children }) => <ul className="list-disc pl-5 mb-3 space-y-1">{children}</ul>,
+  ol: ({ children }) => <ol className="list-decimal pl-5 mb-3 space-y-1">{children}</ol>,
+  h1: ({ children }) => <h3 className="font-serif font-semibold mt-3 mb-1">{children}</h3>,
+  h2: ({ children }) => <h3 className="font-serif font-semibold mt-3 mb-1">{children}</h3>,
+  h3: ({ children }) => <h4 className="font-semibold mt-3 mb-1">{children}</h4>,
+  strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
+  code: ({ children }) => <code className="rounded bg-sunken px-1 py-0.5 font-mono text-[13px]">{children}</code>,
+  pre: ({ children }) => <pre className="rounded-md bg-sunken p-3 overflow-x-auto mb-3 text-[13px]">{children}</pre>,
+  blockquote: ({ children }) => <blockquote className="border-l-2 border-line-strong pl-3 text-ink-muted mb-3">{children}</blockquote>,
+  table: ({ children }) => <div className="overflow-x-auto mb-3"><table className="text-sm border-collapse">{children}</table></div>,
+  th: ({ children }) => <th className="border border-line px-2 py-1 text-left font-semibold bg-sunken/60">{children}</th>,
+  td: ({ children }) => <td className="border border-line px-2 py-1">{children}</td>,
+  a: ({ href, children }) => {
+    const match = href?.match(/^#source-(\d+)$/)
+    if (match) {
+      return (
+        <button
+          type="button"
+          onClick={() => onCite(Number(match[1]) - 1)}
+          className="mx-0.5 rounded bg-accent-soft px-1.5 text-[12px] font-medium text-accent hover:bg-accent/20 align-baseline"
+        >
+          {children}
+        </button>
+      )
+    }
+    return (
+      <a href={href} target="_blank" rel="noopener noreferrer" className="text-accent underline underline-offset-2 hover:text-accent-hover">
+        {children}
+      </a>
+    )
+  }
+})
+
+const SUGGESTED_QUESTIONS = [
+  'Summarise the main points.',
+  'Who are the key people and organisations?',
+  'What conclusions does it reach?'
+]
+
+function Sources({ sources, expanded, onToggle }) {
+  return (
+    <div className="mt-3">
+      <p className="text-xs font-medium text-ink-faint mb-1.5">Sources</p>
+      <ol className="space-y-1">
+        {sources.map((src, sIdx) => {
+          const isOpen = !!expanded[sIdx]
+          return (
+            <li key={sIdx} className="rounded-md border border-line bg-paper text-sm">
+              <button
+                onClick={() => onToggle(sIdx)}
+                aria-expanded={isOpen}
+                className="w-full flex items-center gap-1.5 px-2.5 py-1.5 text-left text-ink-muted hover:text-ink"
+              >
+                {isOpen ? <ChevronDown className="w-3.5 h-3.5 shrink-0" /> : <ChevronRight className="w-3.5 h-3.5 shrink-0" />}
+                <span className="font-medium">Source {sIdx + 1}</span>
+                {typeof src.score === 'number' && (
+                  <span className="ml-auto text-xs text-ink-faint">{Math.round(src.score * 100)}% match</span>
+                )}
+              </button>
+              {isOpen && (
+                <blockquote className="border-t border-line px-3 py-2 font-serif text-[15px] leading-relaxed text-ink-muted whitespace-pre-wrap break-words">
+                  {src.text || src.chunk || String(src)}
+                </blockquote>
+              )}
+            </li>
+          )
+        })}
+      </ol>
+    </div>
+  )
+}
+
+export default function ChatBox({ docId }) {
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [expandedSources, setExpandedSources] = useState({})
-  const messagesEndRef = useRef(null)
+  const scrollRef = useRef(null)
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }
-
+  // Scroll only the message list; scrollIntoView would also scroll the page around it
   useEffect(() => {
-    scrollToBottom()
+    const el = scrollRef.current
+    if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' })
   }, [messages, loading])
 
-  const toggleSource = (msgIndex, sourceIndex) => {
+  const setSourceOpen = (msgIndex, sourceIndex, open) => {
     const key = `${msgIndex}-${sourceIndex}`
-    setExpandedSources(prev => ({
-      ...prev,
-      [key]: !prev[key]
-    }))
+    setExpandedSources(prev => ({ ...prev, [key]: open ?? !prev[key] }))
   }
 
   const handleSend = async (questionText) => {
-    const query = questionText || input.trim()
+    const query = (questionText || input).trim()
     if (!query || loading) return
 
     setInput('')
-    const userMsg = { role: 'user', content: query }
-    setMessages(prev => [...prev, userMsg])
+    setMessages(prev => [...prev, { role: 'user', content: query }])
     setLoading(true)
 
     try {
       const res = await api.chatWithDocument(docId, query)
-      const aiMsg = {
-        role: 'assistant',
-        content: res.answer,
-        sources: res.sources || [],
-        confidence: res.confidence || null
-      }
-      setMessages(prev => [...prev, aiMsg])
-    } catch (err) {
       setMessages(prev => [
         ...prev,
         {
           role: 'assistant',
-          content: `Sorry, an error occurred: ${err.message || 'Unable to retrieve answer.'}`,
-          isError: true
+          content: res.answer,
+          sources: res.sources || [],
+          confidence: typeof res.confidence === 'number' ? res.confidence : null
         }
+      ])
+    } catch (err) {
+      setMessages(prev => [
+        ...prev,
+        { role: 'assistant', content: err.message || 'Could not get an answer. Please try again.', isError: true }
       ])
     } finally {
       setLoading(false)
     }
   }
 
-  const suggestedQuestions = [
-    "What is the main summary of this document?",
-    "What are the key entities and organizations mentioned?",
-    "What are the major takeaways or conclusions?"
-  ]
-
   return (
-    <div className="flex flex-col h-full bg-gray-900/60 rounded-2xl border border-gray-800 overflow-hidden">
-      {/* Header */}
-      <div className="px-5 py-3.5 border-b border-gray-800 bg-gray-950/40 flex items-center justify-between">
-        <div className="flex items-center space-x-2">
-          <Bot className="w-4 h-4 text-blue-400" />
-          <span className="text-sm font-bold text-white">Document RAG Assistant</span>
-        </div>
-        <span className="text-xs text-gray-400 bg-gray-800/60 px-2 py-0.5 rounded font-mono truncate max-w-[200px]">
-          {docFilename}
-        </span>
+    <section className="panel flex flex-col h-full overflow-hidden" aria-label="Ask about this document">
+      <div className="px-4 py-3 border-b border-line">
+        <h2 className="font-serif text-lg font-semibold text-ink">Ask about this document</h2>
+        <p className="text-xs text-ink-faint">Answers come only from the document’s text, with the passages they used.</p>
       </div>
 
-      {/* Messages Scroll Area */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-5" aria-live="polite">
         {messages.length === 0 ? (
-          <div className="h-full flex flex-col items-center justify-center text-center p-6 my-auto">
-            <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-blue-600/20 to-purple-600/20 border border-blue-500/20 flex items-center justify-center text-blue-400 mb-3 shadow-lg shadow-blue-500/10">
-              <Sparkles className="w-6 h-6" />
-            </div>
-            <h4 className="text-white font-semibold text-sm">Ask Anything About This Document</h4>
-            <p className="text-xs text-gray-400 mt-1 max-w-sm">
-              Grounded answers generated strictly from document contents with exact chunk citations.
-            </p>
-
-            {/* Suggested Question Chips */}
-            <div className="mt-6 space-y-2 w-full max-w-sm text-left">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-gray-500 block mb-1">
-                Suggested Prompts
-              </span>
-              {suggestedQuestions.map((q, i) => (
-                <button
-                  key={i}
-                  onClick={() => handleSend(q)}
-                  className="w-full text-left p-2.5 rounded-xl bg-gray-800/40 hover:bg-gray-800 border border-gray-700/50 hover:border-blue-500/50 text-xs text-gray-300 hover:text-white transition-all flex items-center justify-between group"
-                >
-                  <span className="truncate pr-2">{q}</span>
-                  <Send className="w-3 h-3 text-gray-500 group-hover:text-blue-400 shrink-0" />
-                </button>
+          <div className="pt-2">
+            <p className="text-sm text-ink-muted mb-3">Try one of these, or ask your own question:</p>
+            <ul className="space-y-1.5">
+              {SUGGESTED_QUESTIONS.map(q => (
+                <li key={q}>
+                  <button
+                    onClick={() => handleSend(q)}
+                    className="w-full text-left rounded-md border border-line bg-paper px-3 py-2 text-sm text-ink hover:border-line-strong hover:bg-sunken/60 transition-colors"
+                  >
+                    {q}
+                  </button>
+                </li>
               ))}
-            </div>
+            </ul>
           </div>
         ) : (
-          messages.map((msg, idx) => (
-            <div
-              key={idx}
-              className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}
-            >
-              <div
-                className={`flex space-x-2.5 max-w-[85%] ${
-                  msg.role === 'user' ? 'flex-row-reverse space-x-reverse' : 'flex-row'
-                }`}
-              >
-                {/* Avatar */}
-                <div
-                  className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 text-xs font-bold ${
-                    msg.role === 'user'
-                      ? 'bg-blue-600 text-white'
-                      : msg.isError
-                      ? 'bg-red-500/20 text-red-400 border border-red-500/30'
-                      : 'bg-purple-600/20 text-purple-300 border border-purple-500/30'
-                  }`}
-                >
-                  {msg.role === 'user' ? <User className="w-3.5 h-3.5" /> : <Bot className="w-3.5 h-3.5" />}
-                </div>
-
-                {/* Message Bubble */}
-                <div
-                  className={`rounded-2xl px-4 py-3 text-sm leading-relaxed ${
-                    msg.role === 'user'
-                      ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20'
-                      : msg.isError
-                      ? 'bg-red-500/10 border border-red-500/20 text-red-300'
-                      : 'bg-gray-800/80 border border-gray-700/70 text-gray-100 shadow-md'
-                  }`}
-                >
-                  <p className="whitespace-pre-wrap">{msg.content}</p>
-
-                  {/* Confidence Badge */}
-                  {msg.confidence && (
-                    <div className="mt-3 pt-2 border-t border-gray-700/60 flex items-center space-x-2 text-xs text-emerald-400">
-                      <ShieldCheck className="w-3.5 h-3.5" />
-                      <span className="font-semibold">Retrieval Confidence: {msg.confidence}%</span>
-                    </div>
-                  )}
-
-                  {/* Sources Accordion */}
-                  {msg.sources && msg.sources.length > 0 && (
-                    <div className="mt-3 space-y-2">
-                      <div className="flex items-center space-x-1.5 text-xs text-gray-400 font-semibold">
-                        <BookOpen className="w-3.5 h-3.5 text-blue-400" />
-                        <span>Cited Sources ({msg.sources.length}):</span>
-                      </div>
-                      <div className="space-y-1.5">
-                        {msg.sources.map((src, sIdx) => {
-                          const isExpanded = expandedSources[`${idx}-${sIdx}`]
-                          return (
-                            <div
-                              key={sIdx}
-                              className="rounded-lg bg-gray-950/60 border border-gray-800 text-xs overflow-hidden"
-                            >
-                              <button
-                                onClick={() => toggleSource(idx, sIdx)}
-                                className="w-full px-3 py-2 flex items-center justify-between text-gray-300 hover:text-white hover:bg-gray-800/40 transition-colors"
-                              >
-                                <span className="font-medium text-blue-400">
-                                  Source {sIdx + 1} {src.score ? `• ${Math.round(src.score * 100)}% match` : ''}
-                                </span>
-                                {isExpanded ? (
-                                  <ChevronUp className="w-3.5 h-3.5 text-gray-500" />
-                                ) : (
-                                  <ChevronDown className="w-3.5 h-3.5 text-gray-500" />
-                                )}
-                              </button>
-                              {isExpanded && (
-                                <div className="px-3 pb-2.5 pt-1 text-gray-400 text-[11px] font-mono leading-relaxed border-t border-gray-800/60 bg-gray-950/90">
-                                  "{src.text || src.chunk || src}"
-                                </div>
-                              )}
-                            </div>
-                          )
-                        })}
-                      </div>
-                    </div>
-                  )}
-                </div>
+          messages.map((msg, idx) =>
+            msg.role === 'user' ? (
+              <div key={idx} className="flex justify-end">
+                <p className="max-w-[85%] rounded-lg bg-sunken px-3.5 py-2 text-sm text-ink whitespace-pre-wrap break-words">
+                  {msg.content}
+                </p>
               </div>
-            </div>
-          ))
+            ) : msg.isError ? (
+              <p key={idx} role="alert" className="rounded-md border border-danger/30 bg-danger-soft px-3 py-2 text-sm text-danger">
+                {msg.content}
+              </p>
+            ) : (
+              <div key={idx} className="text-[15px] leading-relaxed text-ink break-words">
+                <ReactMarkdown
+                  remarkPlugins={[remarkGfm]}
+                  components={markdownComponents((sIdx) => setSourceOpen(idx, sIdx, true))}
+                >
+                  {linkCitations(msg.content)}
+                </ReactMarkdown>
+
+                {msg.sources?.length > 0 && (
+                  <Sources
+                    sources={msg.sources}
+                    expanded={Object.fromEntries(msg.sources.map((_, s) => [s, expandedSources[`${idx}-${s}`]]))}
+                    onToggle={(sIdx) => setSourceOpen(idx, sIdx)}
+                  />
+                )}
+
+                {msg.confidence != null && (
+                  <p className="mt-2 text-xs text-ink-faint">Best passage match: {msg.confidence}%</p>
+                )}
+              </div>
+            )
+          )
         )}
 
-        {/* Loading Indicator */}
         {loading && (
-          <div className="flex items-center space-x-2.5">
-            <div className="w-7 h-7 rounded-lg bg-purple-600/20 text-purple-300 border border-purple-500/30 flex items-center justify-center">
-              <Bot className="w-3.5 h-3.5" />
-            </div>
-            <div className="rounded-2xl px-4 py-3 bg-gray-800/80 border border-gray-700/70 flex items-center space-x-2 text-xs text-gray-400">
-              <span className="animate-spin w-3.5 h-3.5 border-2 border-blue-400 border-t-transparent rounded-full" />
-              <span>Scanning document vectors & synthesizing answer...</span>
-            </div>
-          </div>
+          <p className="flex items-center gap-2 text-sm text-ink-muted">
+            <span className="spinner w-4 h-4" />
+            Reading the relevant passages…
+          </p>
         )}
-
-        <div ref={messagesEndRef} />
       </div>
 
-      {/* Input Bar */}
       <form
-        onSubmit={(e) => {
-          e.preventDefault()
-          handleSend()
-        }}
-        className="p-3 bg-gray-950/80 border-t border-gray-800 flex items-center space-x-2"
+        onSubmit={(e) => { e.preventDefault(); handleSend() }}
+        className="border-t border-line p-3 flex items-end gap-2"
       >
-        <input
-          type="text"
+        <textarea
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          placeholder="Ask a question about this document..."
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend() }
+          }}
+          rows={1}
+          placeholder="Ask a question…"
+          aria-label="Ask a question about this document"
+          maxLength={2000}
           disabled={loading}
-          className="flex-1 bg-gray-900 border border-gray-800 rounded-xl px-4 py-2.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all disabled:opacity-50"
+          className="input resize-none max-h-32"
         />
         <button
           type="submit"
           disabled={!input.trim() || loading}
-          className="p-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-500/20 disabled:opacity-40 transition-all"
+          aria-label="Send question"
+          className="btn-primary p-2.5 shrink-0"
         >
-          <Send className="w-4 h-4" />
+          <ArrowUp className="w-4 h-4" />
         </button>
       </form>
-    </div>
+    </section>
   )
 }

@@ -1,203 +1,203 @@
-import React, { useState, useEffect } from 'react'
-import { Plus, Search, FileText, Calendar, ArrowRight, Sparkles, Network, Database, Layers, RefreshCw } from 'lucide-react'
+import React, { useState, useEffect, useCallback, lazy, Suspense } from 'react'
+import { Plus, Search, RefreshCw, AlertCircle, ChevronRight } from 'lucide-react'
 import { api } from '../api'
-import KnowledgeGraph from './KnowledgeGraph'
 import UploadModal from './UploadModal'
 
-export default function Dashboard({ onSelectDoc, activeTab = 'documents' }) {
+// Cytoscape is large; only load it when a graph is actually shown
+const KnowledgeGraph = lazy(() => import('./KnowledgeGraph'))
+
+const fileType = (filename) => (filename.split('.').pop() || '').toUpperCase().slice(0, 4)
+
+export const formatDate = (value) =>
+  value ? new Date(value).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : ''
+
+export function GraphFallback() {
+  return (
+    <div className="panel h-full min-h-[500px] flex items-center justify-center">
+      <span className="spinner w-5 h-5" aria-label="Loading graph" />
+    </div>
+  )
+}
+
+function ErrorNotice({ message, onRetry }) {
+  return (
+    <div role="alert" className="panel flex items-center justify-between gap-4 px-4 py-3 border-danger/30 bg-danger-soft">
+      <div className="flex items-center gap-2 text-sm text-danger">
+        <AlertCircle className="w-4 h-4 shrink-0" />
+        <span>{message}</span>
+      </div>
+      <button onClick={onRetry} className="btn-secondary py-1.5">Retry</button>
+    </div>
+  )
+}
+
+function Library({ onSelectDoc }) {
   const [docs, setDocs] = useState([])
-  const [globalGraph, setGlobalGraph] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [isUploadOpen, setIsUploadOpen] = useState(false)
 
-  const loadData = async () => {
+  const loadDocs = useCallback(async () => {
     setLoading(true)
+    setError(null)
     try {
-      const [docList, graphRes] = await Promise.all([
-        api.listDocuments().catch(() => []),
-        api.getGlobalGraph().catch(() => ({ nodes: [], edges: [] }))
-      ])
-      setDocs(docList || [])
-      setGlobalGraph(graphRes)
+      setDocs((await api.listDocuments()) || [])
     } catch (err) {
-      console.error('Error loading dashboard data:', err)
+      setError(err.message || 'Could not load your documents.')
     } finally {
       setLoading(false)
     }
-  }
-
-  useEffect(() => {
-    loadData()
   }, [])
 
-  const filteredDocs = docs.filter(d => 
-    d.filename.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (d.summary && d.summary.toLowerCase().includes(searchQuery.toLowerCase()))
-  )
+  useEffect(() => { loadDocs() }, [loadDocs])
+
+  const q = searchQuery.trim().toLowerCase()
+  const filteredDocs = q
+    ? docs.filter(d => d.filename.toLowerCase().includes(q) || (d.summary || '').toLowerCase().includes(q))
+    : docs
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
-      {/* Metrics Banner */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
-        <div className="bg-gray-900/70 border border-gray-800 rounded-2xl p-5 backdrop-blur flex items-center justify-between">
-          <div>
-            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Document Library</p>
-            <h3 className="text-2xl font-bold text-white mt-1">{docs.length} files</h3>
-          </div>
-          <div className="w-12 h-12 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400">
-            <FileText className="w-6 h-6" />
-          </div>
+    <>
+      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-6">
+        <div>
+          <h1 className="font-serif text-3xl font-semibold text-ink">Library</h1>
+          <p className="mt-1 text-sm text-ink-muted">
+            {loading ? 'Loading…' : `${docs.length} ${docs.length === 1 ? 'document' : 'documents'}`}
+          </p>
         </div>
-
-        <div className="bg-gray-900/70 border border-gray-800 rounded-2xl p-5 backdrop-blur flex items-center justify-between">
-          <div>
-            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Graph Entities</p>
-            <h3 className="text-2xl font-bold text-purple-400 mt-1">
-              {globalGraph?.nodes?.length || 0} nodes
-            </h3>
+        <div className="flex items-center gap-2">
+          <div className="relative w-full sm:w-64">
+            <Search className="w-4 h-4 text-ink-faint absolute left-3 top-1/2 -translate-y-1/2" />
+            <input
+              type="search"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search titles and summaries"
+              aria-label="Search documents"
+              className="input pl-9"
+            />
           </div>
-          <div className="w-12 h-12 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-400">
-            <Network className="w-6 h-6" />
-          </div>
-        </div>
-
-        <div className="bg-gray-900/70 border border-gray-800 rounded-2xl p-5 backdrop-blur flex items-center justify-between">
-          <div>
-            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Storage Engine</p>
-            <h3 className="text-2xl font-bold text-emerald-400 mt-1">SQLite Local</h3>
-          </div>
-          <div className="w-12 h-12 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
-            <Database className="w-6 h-6" />
-          </div>
+          <button onClick={() => setIsUploadOpen(true)} className="btn-primary shrink-0">
+            <Plus className="w-4 h-4" />
+            Upload
+          </button>
         </div>
       </div>
 
-      {activeTab === 'graph' ? (
-        /* Global Knowledge Graph View */
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-xl font-bold text-white tracking-tight">Cross-Document Knowledge Graph</h2>
-              <p className="text-xs text-gray-400 mt-0.5">
-                Multi-document entity co-occurrence network across your entire uploaded collection
-              </p>
-            </div>
-            <button
-              onClick={loadData}
-              className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-gray-900 border border-gray-800 text-xs font-semibold text-gray-300 hover:text-white hover:border-gray-700 transition-all"
-            >
-              <RefreshCw className="w-3.5 h-3.5" />
-              <span>Refresh Graph</span>
-            </button>
-          </div>
-          <div className="h-[600px] w-full">
-            <KnowledgeGraph 
-              graphData={globalGraph} 
-              title="Global Multi-Document Knowledge Graph" 
-            />
-          </div>
+      {error ? (
+        <ErrorNotice message={error} onRetry={loadDocs} />
+      ) : loading ? (
+        <div className="py-20 flex justify-center">
+          <span className="spinner w-6 h-6" aria-label="Loading documents" />
         </div>
+      ) : docs.length === 0 ? (
+        <div className="panel px-6 py-16 text-center">
+          <h2 className="font-serif text-xl font-semibold text-ink">Your library is empty</h2>
+          <p className="mt-2 text-sm text-ink-muted max-w-md mx-auto">
+            Upload a PDF, Word document, text file or scanned image. DocuMind extracts the text,
+            writes a short summary, and lets you ask questions about it.
+          </p>
+          <button onClick={() => setIsUploadOpen(true)} className="btn-primary mt-6">
+            <Plus className="w-4 h-4" />
+            Upload your first document
+          </button>
+        </div>
+      ) : filteredDocs.length === 0 ? (
+        <p className="py-12 text-center text-sm text-ink-muted">No documents match “{searchQuery}”.</p>
       ) : (
-        /* Document Library View */
-        <div>
-          {/* Controls Bar */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-            <div className="relative flex-1 max-w-md">
-              <Search className="w-4 h-4 text-gray-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search documents and summaries..."
-                className="w-full bg-gray-900/90 border border-gray-800 rounded-xl py-2 pl-10 pr-4 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all"
-              />
-            </div>
-
-            <div className="flex items-center space-x-3">
+        <ul className="panel divide-y divide-line overflow-hidden">
+          {filteredDocs.map((doc) => (
+            <li key={doc.id}>
               <button
-                onClick={() => setIsUploadOpen(true)}
-                className="flex items-center space-x-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-sm font-semibold rounded-xl shadow-lg shadow-blue-500/20 transition-all"
+                onClick={() => onSelectDoc(doc)}
+                className="group w-full text-left px-5 py-4 flex items-start gap-4 hover:bg-sunken/60 transition-colors"
               >
-                <Plus className="w-4 h-4" />
-                <span>Upload Document</span>
-              </button>
-            </div>
-          </div>
-
-          {/* Document Grid */}
-          {loading ? (
-            <div className="py-20 text-center flex flex-col items-center justify-center">
-              <span className="animate-spin w-8 h-8 border-3 border-blue-500 border-t-transparent rounded-full mb-3" />
-              <p className="text-sm text-gray-400">Loading your knowledge base...</p>
-            </div>
-          ) : filteredDocs.length === 0 ? (
-            <div className="border border-dashed border-gray-800 rounded-2xl p-12 text-center bg-gray-950/30">
-              <div className="w-16 h-16 rounded-2xl bg-gray-900 border border-gray-800 flex items-center justify-center mx-auto text-gray-500 mb-4">
-                <FileText className="w-8 h-8" />
-              </div>
-              <h3 className="text-base font-bold text-white">No documents found</h3>
-              <p className="text-xs text-gray-400 max-w-md mx-auto mt-1 mb-6">
-                Upload your first PDF, Word document, text file, or image to extract entities, build graphs, and query using AI.
-              </p>
-              <button
-                onClick={() => setIsUploadOpen(true)}
-                className="inline-flex items-center space-x-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold rounded-xl shadow-lg shadow-blue-500/20 transition-all"
-              >
-                <Plus className="w-4 h-4" />
-                <span>Upload Your First File</span>
-              </button>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-              {filteredDocs.map((doc) => (
-                <div
-                  key={doc.id}
-                  onClick={() => onSelectDoc(doc)}
-                  className="bg-gray-900/60 hover:bg-gray-900 border border-gray-800 hover:border-blue-500/40 rounded-2xl p-5 cursor-pointer transition-all hover:shadow-xl hover:shadow-blue-500/5 group flex flex-col justify-between"
-                >
-                  <div>
-                    <div className="flex items-start justify-between mb-3">
-                      <div className="w-10 h-10 rounded-xl bg-blue-600/10 border border-blue-500/20 flex items-center justify-center text-blue-400 group-hover:bg-blue-600 group-hover:text-white transition-all">
-                        <FileText className="w-5 h-5" />
-                      </div>
-                      <span className="text-[11px] font-mono text-gray-500 bg-gray-950 px-2 py-0.5 rounded border border-gray-800/80">
-                        #{doc.id}
-                      </span>
-                    </div>
-
-                    <h4 className="font-bold text-white text-base group-hover:text-blue-400 transition-colors line-clamp-1 mb-2">
+                <span className="mt-0.5 w-11 shrink-0 rounded border border-line bg-paper py-1 text-center font-mono text-[10px] font-medium text-ink-muted">
+                  {fileType(doc.filename)}
+                </span>
+                <span className="flex-1 min-w-0">
+                  <span className="flex items-baseline justify-between gap-4">
+                    <span className="font-medium text-ink truncate group-hover:text-accent transition-colors">
                       {doc.filename}
-                    </h4>
-
-                    <p className="text-xs text-gray-400 line-clamp-3 leading-relaxed mb-4">
-                      {doc.summary || "No executive summary available for this file."}
-                    </p>
-                  </div>
-
-                  <div className="pt-3 border-t border-gray-800/60 flex items-center justify-between text-xs text-gray-500">
-                    <div className="flex items-center space-x-1.5">
-                      <Calendar className="w-3.5 h-3.5" />
-                      <span>{new Date(doc.created_at).toLocaleDateString()}</span>
-                    </div>
-                    <span className="flex items-center space-x-1 text-blue-400 font-semibold group-hover:translate-x-1 transition-transform">
-                      <span>Analyze</span>
-                      <ArrowRight className="w-3.5 h-3.5" />
                     </span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+                    <span className="shrink-0 text-xs text-ink-faint">{formatDate(doc.created_at)}</span>
+                  </span>
+                  <span className="mt-1 block text-sm text-ink-muted leading-relaxed line-clamp-2">
+                    {doc.summary || 'No summary available.'}
+                  </span>
+                </span>
+                <ChevronRight className="mt-1 w-4 h-4 shrink-0 text-ink-faint group-hover:text-accent transition-colors" />
+              </button>
+            </li>
+          ))}
+        </ul>
       )}
 
-      {/* Upload Modal */}
       <UploadModal
         isOpen={isUploadOpen}
         onClose={() => setIsUploadOpen(false)}
-        onUploadSuccess={loadData}
+        onUploadSuccess={loadDocs}
       />
+    </>
+  )
+}
+
+function GlobalGraph() {
+  const [graph, setGraph] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
+
+  const loadGraph = useCallback(async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      setGraph(await api.getGlobalGraph())
+    } catch (err) {
+      setError(err.message || 'Could not build the knowledge graph.')
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => { loadGraph() }, [loadGraph])
+
+  return (
+    <>
+      <div className="flex items-end justify-between gap-4 mb-6">
+        <div>
+          <h1 className="font-serif text-3xl font-semibold text-ink">Knowledge graph</h1>
+          <p className="mt-1 text-sm text-ink-muted">
+            People, organisations, places and other entities across your documents, linked when they appear together.
+          </p>
+        </div>
+        <button onClick={loadGraph} disabled={loading} className="btn-secondary shrink-0">
+          <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+          Refresh
+        </button>
+      </div>
+
+      {error ? (
+        <ErrorNotice message={error} onRetry={loadGraph} />
+      ) : (
+        <div className="h-[620px]">
+          {loading ? (
+            <GraphFallback />
+          ) : (
+            <Suspense fallback={<GraphFallback />}>
+              <KnowledgeGraph graphData={graph} title="All documents" />
+            </Suspense>
+          )}
+        </div>
+      )}
+    </>
+  )
+}
+
+export default function Dashboard({ onSelectDoc, activeTab = 'documents' }) {
+  return (
+    <div className="max-w-6xl mx-auto px-4 sm:px-6 py-10">
+      {activeTab === 'graph' ? <GlobalGraph /> : <Library onSelectDoc={onSelectDoc} />}
     </div>
   )
 }

@@ -1,174 +1,152 @@
-import React, { useState, useRef } from 'react'
-import { UploadCloud, X, FileText, CheckCircle2, AlertCircle, Scan, Sparkles } from 'lucide-react'
+import React, { useState, useRef, useEffect } from 'react'
+import { UploadCloud, X, FileText, AlertCircle } from 'lucide-react'
 import { api } from '../api'
+
+const ACCEPTED = '.pdf,.docx,.txt,.png,.jpg,.jpeg,.webp'
+const IMAGE_PATTERN = /\.(png|jpe?g|webp)$/i
 
 export default function UploadModal({ isOpen, onClose, onUploadSuccess }) {
   const [dragActive, setDragActive] = useState(false)
   const [file, setFile] = useState(null)
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState(null)
-  const [statusMessage, setStatusMessage] = useState('')
   const inputRef = useRef(null)
 
+  // Start fresh every time the dialog opens
+  useEffect(() => {
+    if (isOpen) {
+      setFile(null)
+      setError(null)
+      setDragActive(false)
+    }
+  }, [isOpen])
+
+  // Escape closes the dialog (but not mid-upload)
+  useEffect(() => {
+    if (!isOpen) return
+    const onKey = (e) => {
+      if (e.key === 'Escape' && !uploading) onClose()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [isOpen, uploading, onClose])
+
   if (!isOpen) return null
+
+  const pickFile = (picked) => {
+    if (picked) {
+      setFile(picked)
+      setError(null)
+    }
+  }
 
   const handleDrag = (e) => {
     e.preventDefault()
     e.stopPropagation()
-    if (e.type === 'dragenter' || e.type === 'dragover') {
-      setDragActive(true)
-    } else if (e.type === 'dragleave') {
-      setDragActive(false)
-    }
+    if (e.type === 'dragenter' || e.type === 'dragover') setDragActive(true)
+    else if (e.type === 'dragleave' && !e.currentTarget.contains(e.relatedTarget)) setDragActive(false)
   }
 
   const handleDrop = (e) => {
     e.preventDefault()
     e.stopPropagation()
     setDragActive(false)
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      setFile(e.dataTransfer.files[0])
-    }
-  }
-
-  const handleChange = (e) => {
-    if (e.target.files && e.target.files[0]) {
-      setFile(e.target.files[0])
-    }
+    pickFile(e.dataTransfer.files?.[0])
   }
 
   const handleUpload = async () => {
     if (!file) return
-
     setUploading(true)
     setError(null)
-    const isImage = file.name.match(/\.(png|jpg|jpeg|webp)$/i)
-    setStatusMessage(isImage ? 'Running Tesseract OCR & extracting text...' : 'Parsing document & generating AI embeddings...')
-
     try {
-      const res = await api.uploadDocument(file)
-      setStatusMessage('Document intelligence complete!')
-      setTimeout(() => {
-        setUploading(false)
-        setFile(null)
-        onUploadSuccess(res)
-        onClose()
-      }, 700)
+      await api.uploadDocument(file)
+      onUploadSuccess()
+      onClose()
     } catch (err) {
       setError(err.message || 'Upload failed. Please try again.')
+    } finally {
       setUploading(false)
     }
   }
 
+  const isImage = file && IMAGE_PATTERN.test(file.name)
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="w-full max-w-lg bg-gray-900 border border-gray-800 rounded-2xl shadow-2xl overflow-hidden relative">
-        {/* Header */}
-        <div className="flex items-center justify-between p-5 border-b border-gray-800 bg-gray-950/40">
-          <div className="flex items-center space-x-2">
-            <UploadCloud className="w-5 h-5 text-blue-400" />
-            <h3 className="text-base font-bold text-white">Upload & Analyze Document</h3>
-          </div>
-          <button
-            onClick={onClose}
-            disabled={uploading}
-            className="text-gray-400 hover:text-white p-1 rounded-lg hover:bg-gray-800 transition-colors"
-          >
-            <X className="w-5 h-5" />
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-ink/40 animate-fade-in"
+      onMouseDown={(e) => { if (e.target === e.currentTarget && !uploading) onClose() }}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="upload-title"
+        className="w-full max-w-lg rounded-lg border border-line bg-surface shadow-raised animate-slide-up"
+      >
+        <div className="flex items-center justify-between px-5 py-4 border-b border-line">
+          <h2 id="upload-title" className="font-serif text-lg font-semibold text-ink">Upload a document</h2>
+          <button onClick={onClose} disabled={uploading} className="btn-ghost p-1.5" aria-label="Close">
+            <X className="w-4 h-4" />
           </button>
         </div>
 
-        {/* Content */}
-        <div className="p-6">
+        <div className="p-5">
           {error && (
-            <div className="mb-4 p-3 rounded-xl bg-red-500/10 border border-red-500/20 flex items-start space-x-2 text-red-400 text-sm">
+            <div role="alert" className="mb-4 flex items-start gap-2 rounded-md border border-danger/30 bg-danger-soft px-3 py-2.5 text-sm text-danger">
               <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
               <span>{error}</span>
             </div>
           )}
 
-          {/* Drag and Drop Zone */}
           <div
             onDragEnter={handleDrag}
             onDragLeave={handleDrag}
             onDragOver={handleDrag}
             onDrop={handleDrop}
-            onClick={() => inputRef.current?.click()}
-            className={`border-2 border-dashed rounded-2xl p-8 text-center cursor-pointer transition-all ${
-              dragActive 
-                ? 'border-blue-500 bg-blue-500/10' 
-                : file 
-                  ? 'border-green-500/50 bg-green-500/5' 
-                  : 'border-gray-700 hover:border-gray-600 bg-gray-950/30'
+            onClick={() => !uploading && inputRef.current?.click()}
+            onKeyDown={(e) => { if ((e.key === 'Enter' || e.key === ' ') && !uploading) { e.preventDefault(); inputRef.current?.click() } }}
+            role="button"
+            tabIndex={0}
+            aria-label="Choose a file to upload"
+            className={`rounded-lg border-2 border-dashed px-6 py-10 text-center cursor-pointer transition-colors ${
+              dragActive ? 'border-accent bg-accent-soft/60' : 'border-line-strong bg-paper hover:bg-sunken/60'
             }`}
           >
             <input
               ref={inputRef}
               type="file"
-              onChange={handleChange}
-              accept=".pdf,.docx,.txt,.png,.jpg,.jpeg,.webp"
+              onChange={(e) => pickFile(e.target.files?.[0])}
+              accept={ACCEPTED}
               className="hidden"
             />
 
             {file ? (
               <div className="flex flex-col items-center">
-                <div className="w-12 h-12 rounded-xl bg-green-500/10 border border-green-500/20 flex items-center justify-center text-green-400 mb-3">
-                  <FileText className="w-6 h-6" />
-                </div>
-                <p className="text-sm font-semibold text-white max-w-xs truncate">{file.name}</p>
-                <p className="text-xs text-gray-500 mt-1">{(file.size / 1024).toFixed(1)} KB</p>
-                <span className="text-xs text-blue-400 mt-2 hover:underline">Click to change file</span>
+                <FileText className="w-7 h-7 text-accent mb-2" />
+                <p className="text-sm font-medium text-ink max-w-xs truncate">{file.name}</p>
+                <p className="mt-0.5 text-xs text-ink-faint">{(file.size / 1024).toFixed(1)} KB · click to choose another</p>
               </div>
             ) : (
               <div className="flex flex-col items-center">
-                <div className="w-12 h-12 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400 mb-3">
-                  <UploadCloud className="w-6 h-6" />
-                </div>
-                <p className="text-sm font-semibold text-white">Drag & drop your file here, or click to browse</p>
-                <p className="text-xs text-gray-400 mt-1">Supports PDF, DOCX, TXT, PNG, and JPG</p>
+                <UploadCloud className="w-7 h-7 text-ink-faint mb-2" />
+                <p className="text-sm text-ink">
+                  <span className="font-medium text-accent">Choose a file</span> or drag it here
+                </p>
+                <p className="mt-1 text-xs text-ink-faint">PDF, DOCX, TXT, or an image (PNG, JPG, WEBP) to read with OCR</p>
               </div>
             )}
           </div>
 
-          {/* Supported Format Pills */}
-          <div className="flex flex-wrap items-center gap-2 mt-4 text-xs text-gray-400">
-            <span className="text-gray-500 font-medium">Formats:</span>
-            <span className="px-2 py-0.5 rounded bg-gray-800 text-gray-300">PDF</span>
-            <span className="px-2 py-0.5 rounded bg-gray-800 text-gray-300">DOCX</span>
-            <span className="px-2 py-0.5 rounded bg-gray-800 text-gray-300">TXT</span>
-            <span className="px-2 py-0.5 rounded bg-purple-900/40 text-purple-300 border border-purple-800/40 flex items-center space-x-1">
-              <Scan className="w-3 h-3" />
-              <span>OCR Images (PNG/JPG)</span>
-            </span>
-          </div>
-
-          {/* Upload progress status */}
           {uploading && (
-            <div className="mt-5 p-4 rounded-xl bg-blue-950/30 border border-blue-900/50 flex items-center space-x-3">
-              <div className="animate-spin w-5 h-5 border-2 border-blue-400 border-t-transparent rounded-full shrink-0" />
-              <div className="flex-1">
-                <p className="text-xs font-semibold text-blue-300">{statusMessage}</p>
-                <p className="text-[11px] text-gray-400 mt-0.5">Extracting entities, building knowledge graph & chunking</p>
-              </div>
-            </div>
+            <p className="mt-4 flex items-center gap-2 text-sm text-ink-muted" aria-live="polite">
+              <span className="spinner w-4 h-4" />
+              {isImage ? 'Reading text from the image…' : 'Extracting text and writing a summary…'} This can take a minute for long files.
+            </p>
           )}
 
-          {/* Actions */}
-          <div className="mt-6 flex items-center justify-end space-x-3">
-            <button
-              onClick={onClose}
-              disabled={uploading}
-              className="px-4 py-2 text-sm font-medium text-gray-400 hover:text-white transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={handleUpload}
-              disabled={!file || uploading}
-              className="px-5 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-500 rounded-xl shadow-lg shadow-blue-500/25 disabled:opacity-40 transition-all flex items-center space-x-2"
-            >
-              <Sparkles className="w-4 h-4" />
-              <span>{uploading ? 'Processing...' : 'Upload & Analyze'}</span>
+          <div className="mt-5 flex items-center justify-end gap-2">
+            <button onClick={onClose} disabled={uploading} className="btn-ghost">Cancel</button>
+            <button onClick={handleUpload} disabled={!file || uploading} className="btn-primary">
+              {uploading ? 'Uploading…' : 'Upload'}
             </button>
           </div>
         </div>
