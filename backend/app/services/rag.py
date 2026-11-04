@@ -1,13 +1,7 @@
-from fastembed import TextEmbedding
-from groq import Groq
-from dotenv import load_dotenv
 import numpy as np
-import os
+from fastembed import TextEmbedding
 
-load_dotenv()
-
-client = Groq(api_key=os.getenv("GROQ_API_KEY"))
-GROQ_MODEL = os.getenv("GROQ_MODEL", "openai/gpt-oss-20b")
+from app.services.llm import complete
 
 _embedder = None
 
@@ -18,6 +12,8 @@ def get_embedder():
     return _embedder
 
 def chunk_text(text: str, chunk_size: int = 500, overlap: int = 50) -> list:
+    if not 0 <= overlap < chunk_size:
+        raise ValueError("overlap must be at least 0 and smaller than chunk_size")
     words = text.split()
     chunks = []
     i = 0
@@ -65,26 +61,15 @@ def answer_question(question: str, text: str) -> dict:
     top_score = float(scores[top_indices[0]])
     confidence = int(min(100, max(25, round(top_score * 100))))
 
-    response = client.chat.completions.create(
-        model=GROQ_MODEL,
-        messages=[
-            {
-                "role": "system",
-                "content": (
-                    "You are DocuMind's advanced document intelligence assistant. "
-                    "Answer the user's question accurately and objectively using ONLY the provided document context. "
-                    "Reference specific source numbers like [Source 1] when citing facts. "
-                    "If the answer is not supported by the context, state: 'I could not find that information in the document.'"
-                )
-            },
-            {
-                "role": "user",
-                "content": f"Document context:\n{context}\n\nQuestion: {question}"
-            }
-        ]
+    answer_text = complete(
+        system=(
+            "You are DocuMind's advanced document intelligence assistant. "
+            "Answer the user's question accurately and objectively using ONLY the provided document context. "
+            "Reference specific source numbers like [Source 1] when citing facts. "
+            "If the answer is not supported by the context, state: 'I could not find that information in the document.'"
+        ),
+        user=f"Document context:\n{context}\n\nQuestion: {question}",
     )
-
-    answer_text = response.choices[0].message.content
 
     return {
         "answer": answer_text,

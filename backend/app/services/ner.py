@@ -11,16 +11,16 @@ def get_nlp():
 def extract_entities(text: str) -> list:
     if len(text) > 5000:
         text = text[:5000]
-    
+
     nlp = get_nlp()
     doc = nlp(text)
-    
+
     entities = []
     for ent in doc.ents:
         entities.append({
-            "text": ent.text,
+            "text": " ".join(ent.text.split()),
             "label": ent.label_,
             "description": spacy.explain(ent.label_)
         })
-    
+
     return entities

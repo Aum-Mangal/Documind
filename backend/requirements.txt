@@ -1,19 +1,36 @@
-fastapi>=0.110.0
-uvicorn[standard]>=0.28.0
-sqlalchemy>=2.0.0
-psycopg2-binary>=2.9.9
-pydantic>=2.6.0
+# Web
+fastapi==0.138.1
+uvicorn[standard]==0.49.0
+python-multipart==0.0.32
+
+# Config & validation
+pydantic==2.13.4
+pydantic-settings==2.16.2
+python-dotenv==1.2.2
 email-validator==2.2.0
-python-dotenv>=1.0.0
+
+# Database
+sqlalchemy[asyncio]==2.0.51
+asyncpg==0.32.0
+alembic==1.20.1
+
+# Auth
 bcrypt==4.0.1
 PyJWT==2.10.1
-python-multipart>=0.0.9
-PyMuPDF>=1.23.0
-python-docx>=1.1.0
-spacy>=3.7.0
+
+# Redis & object storage
+redis==8.1.0
+boto3==1.43.121
+
+# Document parsing & OCR
+PyMuPDF==1.27.2.3
+python-docx==1.2.0
+pytesseract==0.3.13
+pillow==12.3.0
+
+# NLP, embeddings & LLM
+spacy==3.8.14
 https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl
-groq>=0.11.0
-fastembed>=0.3.0
-numpy>=1.26.0
-pytesseract>=0.3.10
-pillow>=10.0.0
+fastembed==0.8.1
+numpy==2.5.0
+groq==1.5.0

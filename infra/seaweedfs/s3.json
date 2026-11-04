@@ -1,0 +1,14 @@
+{
+  "identities": [
+    {
+      "name": "documind",
+      "credentials": [
+        {
+          "accessKey": "documind",
+          "secretKey": "documind-local-secret"
+        }
+      ],
+      "actions": ["Admin", "Read", "Write", "List", "Tagging"]
+    }
+  ]
+}

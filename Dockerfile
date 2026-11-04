@@ -1,31 +1,32 @@
-FROM python:3.11-slim
+FROM python:3.13-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
     PORT=10000
 
-WORKDIR /app
-
-# Install system dependencies (PostgreSQL headers, build tools, tesseract OCR)
+# Tesseract for OCR on scanned PDFs and images
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    libpq-dev \
     tesseract-ocr \
     tesseract-ocr-eng \
-    curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Install application dependencies (using FastEmbed ONNX instead of PyTorch)
-COPY backend/requirements.txt /app/requirements.txt
-RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -r /app/requirements.txt
-
-# Copy backend source code and compiled frontend
-COPY backend/ /app/backend/
-COPY frontend/dist/ /app/frontend/dist/
+# Run as an unprivileged user (uid 1000 is also what Hugging Face Spaces expects)
+RUN useradd --create-home --uid 1000 app
 
 WORKDIR /app/backend
 
+COPY backend/requirements.txt ./requirements.txt
+RUN pip install --upgrade pip && pip install -r requirements.txt
+
+COPY --chown=app:app backend/ /app/backend/
+COPY --chown=app:app frontend/dist/ /app/frontend/dist/
+
+USER app
 EXPOSE 10000
 
-CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port ${PORT:-10000}"]
+HEALTHCHECK --interval=30s --timeout=5s --start-period=90s --retries=3 \
+    CMD python -c "import os, urllib.request; urllib.request.urlopen(f'http://127.0.0.1:{os.environ.get(\"PORT\", \"10000\")}/api/health', timeout=4)"
+
+# Apply database migrations, then start the API
+CMD ["sh", "-c", "alembic upgrade head && exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-10000}"]

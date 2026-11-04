@@ -1,5 +1,7 @@
 from collections import defaultdict
-from services.ner import get_nlp
+
+from app.services.ner import get_nlp
+
 
 def generate_document_graph(raw_text: str, max_nodes: int = 50) -> dict:
     """
@@ -23,7 +25,7 @@ def generate_document_graph(raw_text: str, max_nodes: int = 50) -> dict:
         doc = nlp(p)
         ents_in_p = []
         for ent in doc.ents:
-            cleaned = ent.text.strip()
+            cleaned = " ".join(ent.text.split())
             if len(cleaned) < 2 or cleaned.lower() in ["the", "this", "that"]:
                 continue
             entity_counts[cleaned] += 1
@@ -86,7 +88,7 @@ def generate_global_graph(documents: list, max_nodes: int = 80) -> dict:
         doc = nlp(text[:2500])
         doc_ents = []
         for ent in doc.ents:
-            cleaned = ent.text.strip()
+            cleaned = " ".join(ent.text.split())
             if len(cleaned) < 2 or cleaned.lower() in ["the", "this", "that"]:
                 continue
             entity_counts[cleaned] += 1

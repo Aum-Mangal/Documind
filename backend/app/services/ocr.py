@@ -1,9 +1,10 @@
 import io
 import logging
-import fitz  # PyMuPDF
-from PIL import Image
-import pytesseract
 import shutil
+
+import fitz  # PyMuPDF
+import pytesseract
+from PIL import Image
 
 logger = logging.getLogger(__name__)
 
@@ -18,11 +19,11 @@ def extract_text_from_image(image_bytes: bytes) -> str:
     try:
         image = Image.open(io.BytesIO(image_bytes))
         image.load()
-    except Image.DecompressionBombError:
-        raise ExtractionError("Image dimensions are too large to process.")
-    except Exception:
+    except Image.DecompressionBombError as e:
+        raise ExtractionError("Image dimensions are too large to process.") from e
+    except Exception as e:
         logger.exception("Failed to open image")
-        raise ExtractionError("Could not read this image file.")
+        raise ExtractionError("Could not read this image file.") from e
 
     if HAS_TESSERACT:
         return pytesseract.image_to_string(image).strip()
@@ -35,9 +36,9 @@ def extract_text_from_pdf(pdf_bytes: bytes, max_pages: int) -> str:
     """
     try:
         pdf = fitz.open(stream=pdf_bytes, filetype="pdf")
-    except Exception:
+    except Exception as e:
         logger.exception("Failed to open PDF")
-        raise ExtractionError("Could not read this PDF file.")
+        raise ExtractionError("Could not read this PDF file.") from e
 
     with pdf:
         if pdf.needs_pass:

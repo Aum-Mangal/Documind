@@ -50,7 +50,7 @@ const request = async (endpoint, { auth = true, ...options } = {}) => {
   let data;
   try {
     data = await response.json();
-  } catch (_) {
+  } catch {
     data = { detail: `Server error (${response.status}): ${response.statusText || 'Unknown response'}` };
   }
 
@@ -69,7 +69,7 @@ const request = async (endpoint, { auth = true, ...options } = {}) => {
 export const api = {
   // Auth
   async signup(email, password) {
-    return request("/auth/signup", {
+    return request("/api/auth/signup", {
       auth: false,
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -78,7 +78,7 @@ export const api = {
   },
 
   async login(email, password) {
-    const res = await request("/auth/login", {
+    const res = await request("/api/auth/login", {
       auth: false,
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -96,33 +96,33 @@ export const api = {
 
   // Documents
   async listDocuments() {
-    return request("/docs/documents");
+    return request("/api/documents");
   },
 
   async uploadDocument(file) {
     const formData = new FormData();
     formData.append("file", file);
 
-    return request("/docs/upload", {
+    return request("/api/documents", {
       method: "POST",
       body: formData,
     });
   },
 
   async getEntities(docId) {
-    return request(`/docs/documents/${docId}/entities`);
+    return request(`/api/documents/${docId}/entities`);
   },
 
   async getDocumentGraph(docId) {
-    return request(`/docs/documents/${docId}/graph`);
+    return request(`/api/documents/${docId}/graph`);
   },
 
   async getGlobalGraph() {
-    return request("/docs/graph/global");
+    return request("/api/graph");
   },
 
   async chatWithDocument(docId, question) {
-    return request(`/docs/documents/${docId}/chat`, {
+    return request(`/api/documents/${docId}/chat`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ question }),

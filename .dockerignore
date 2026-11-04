@@ -14,3 +14,6 @@ frontend/node_modules/
 *.db
 *.sqlite
 *.sqlite3
+**/__pycache__
+frontend/src/
+frontend/public/

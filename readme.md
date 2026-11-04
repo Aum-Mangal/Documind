@@ -7,11 +7,11 @@ The project was built to explore how modern AI applications combine large langua
 ## Features
 
 * **Interactive Knowledge Graph**: Document-level and global multi-document entity co-occurrence networks powered by Cytoscape.js
-* **OCR Support**: Automatic PyMuPDF extraction with Tesseract OCR engine fallback for scanned documents and image files (`.pdf`, `.png`, `.jpg`, `.jpeg`, `.docx`, `.txt`)
-* **Upgraded RAG Pipeline**: Sliding-window chunking (500 words with 100-word overlap), exact cited source snippets, and response confidence scoring
+* **OCR Support**: Automatic PyMuPDF extraction with Tesseract OCR engine fallback for scanned documents and image files (`.pdf`, `.png`, `.jpg`, `.jpeg`, `.webp`, `.docx`, `.txt`)
+* **RAG Pipeline**: Sliding-window chunking (500 words with 50-word overlap), cited source snippets, and retrieval confidence scoring
 * **Modern React Frontend**: Clean, dark-themed UI built with React 18, Vite, Tailwind CSS, and Lucide icons
-* **Zero-Config Database**: Seamless local SQLite fallback (`sqlite:///./documind.db`) alongside optional PostgreSQL / Supabase
-* **User Authentication**: Secure JWT-based registration and token persistence
+* **PostgreSQL + pgvector**: Versioned schema with Alembic migrations, async access with SQLAlchemy 2.0 + asyncpg
+* **User Authentication**: JWT bearer tokens, bcrypt password hashing
 
 ## Tech Stack
 
@@ -22,11 +22,13 @@ The project was built to explore how modern AI applications combine large langua
 * **Lucide React** (Modern iconography)
 
 ### Backend
-* **Python 3.11** / **FastAPI**
-* **SQLAlchemy** (SQLite & PostgreSQL support)
+* **Python 3.13** / **FastAPI**
+* **PostgreSQL 17 + pgvector**, **SQLAlchemy 2.0 (async)**, **Alembic**
+* **Redis** (caching and rate limiting)
+* **S3-compatible object storage** (SeaweedFS locally, Cloudflare R2 in production)
 * **Tesseract OCR** & **PyMuPDF (fitz)**
 * **FastEmbed ONNX** (`BAAI/bge-small-en-v1.5`, CPU-optimized)
-* **Groq API** (`llama-3.3-70b-versatile`)
+* **Groq API** (model set by `GROQ_MODEL`, default `openai/gpt-oss-20b`)
 * **spaCy** (`en_core_web_sm` NER)
 
 ## Architecture
@@ -34,91 +36,127 @@ The project was built to explore how modern AI applications combine large langua
 ```text
        React + Vite Frontend (Tailwind + Cytoscape.js)
                              |
-                      REST / JSON API
+                     REST / JSON  (/api/*)
                              |
                       FastAPI Backend
-       ______________________|______________________
-      |              |               |              |
-  PyMuPDF &       spaCy NER       FastEmbed     SQLite /
-  Tesseract    Entity Extraction    (ONNX)     PostgreSQL
-     OCR             |               |              |
-      |       Knowledge Graph     Cosine       Persistent
- Document      Co-occurrence    Similarity      Storage
- Parsing          Matrix        Search Engine
+       ______________________|_______________________________
+      |              |               |            |          |
+  PyMuPDF &       spaCy NER       FastEmbed   PostgreSQL   Redis    S3 storage
+  Tesseract    Entity Extraction    (ONNX)    + pgvector   (cache)  (files)
+     OCR             |               |
+      |       Knowledge Graph     Cosine
+ Document      Co-occurrence    Similarity
+ Parsing          Matrix        Search
       |______________________________|
                      |
          Groq LLM (RAG with Citations)
 ```
 
+## Project Layout
+
+```text
+backend/
+  app/
+    core/       config (env settings), security (passwords, JWT)
+    db/         SQLAlchemy models and async session
+    api/        routes: auth, documents, health
+    services/   extraction, OCR, NER, graph, RAG, LLM, storage, cache
+    main.py     FastAPI app
+  alembic/      database migrations
+docker-compose.yml   Postgres + pgvector, Redis, SeaweedFS (S3), API
+```
+
 ## Running Locally
 
-### 1. Clone the repository
+You need [Docker](https://www.docker.com/products/docker-desktop/) and, for frontend work, Node.js.
+
+### 1. Clone and configure
 
 ```bash
 git clone https://github.com/Aum-Mangal/Documind.git
 cd Documind
+cp backend/.env.example backend/.env
 ```
 
-### 2. Backend Setup
+Edit `backend/.env` and set `SECRET_KEY` (at least 32 random characters) and `GROQ_API_KEY`:
+
+```bash
+python -c "import secrets; print(secrets.token_urlsafe(48))"
+```
+
+### 2a. Run everything in Docker
+
+```bash
+docker compose up --build
+```
+
+Open `http://localhost:8000`. Migrations run automatically when the API container starts.
+
+### 2b. Or run the API on your machine (with hot reload)
+
+Start only the services, then the API:
+
+```bash
+docker compose up -d db redis s3
+cd backend
+python -m venv venv
+# Windows: .\venv\Scripts\Activate.ps1    Linux/macOS: source venv/bin/activate
+pip install -r requirements.txt
+alembic upgrade head
+uvicorn app.main:app --reload
+```
+
+Make sure `DATABASE_URL` in `backend/.env` points at the local database (`postgresql://documind:documind@localhost:5432/documind`) and not at a hosted one.
+
+For frontend hot-reloading: `cd frontend && npm install && npm run dev` (proxies `/api` to port 8000).
+
+### Configuration
+
+All settings come from environment variables or `backend/.env`; see [`backend/.env.example`](backend/.env.example) for the full list. The app refuses to start without a valid `SECRET_KEY` and a PostgreSQL `DATABASE_URL`.
+
+### Database migrations
 
 ```bash
 cd backend
-python -m venv venv
-
-# Windows
-.\venv\Scripts\Activate.ps1
-# Linux / macOS
-source venv/bin/activate
-
-pip install -r requirements.txt
+alembic upgrade head                              # apply all migrations
+alembic revision --autogenerate -m "describe it"  # create a migration after changing models
 ```
 
-### 3. Environment Variables
+A database created by an older version of DocuMind can be upgraded in place with `alembic upgrade head`: the baseline migration detects the existing tables.
 
-Create a `.env` file in the root or `backend/` folder:
-
-```env
-# Optional: defaults to local SQLite (sqlite:///./documind.db) if omitted
-DATABASE_URL=sqlite:///./documind.db
-# Required, at least 32 random characters. The server refuses to start without it.
-# Generate one: python -c "import secrets; print(secrets.token_urlsafe(48))"
-SECRET_KEY=
-GROQ_API_KEY=your_groq_api_key
-
-# Optional
-CORS_ORIGINS=            # comma-separated origins, only needed if the frontend is on another domain
-ENABLE_API_DOCS=false    # true serves Swagger UI at /api-docs (keep off in production)
-MAX_UPLOAD_MB=20
-MAX_PDF_PAGES=200
-ACCESS_TOKEN_TTL_HOURS=24
-```
-
-### 4. Run the Full Application
-
-FastAPI directly serves the compiled React SPA:
+### Tests and linting
 
 ```bash
-uvicorn main:app --reload
+cd backend
+pip install -r requirements-dev.txt
+ruff check .
+pytest                      # no database or services needed
+
+cd ../frontend
+npm run lint
+
+# against a running stack (docker compose up), using the SECRET_KEY from backend/.env:
+python scripts/smoke_test.py --base http://127.0.0.1:8000 --secret-key "<SECRET_KEY>"
 ```
 
-Open `http://127.0.0.1:8000` in your browser.
-
-*(For frontend development with hot-reloading: `cd frontend && npm install && npm run dev`)*
+GitHub Actions runs the same checks on every push, plus migrations against a real Postgres + pgvector database (including upgrading a database created by the old schema) and a smoke test of the full Docker stack.
 
 ---
 
 ## API Endpoints
 
-All `/docs/*` endpoints require an `Authorization: Bearer <access_token>` header, using the token returned by `/auth/login`.
+All `/api/documents` and `/api/graph` endpoints require an `Authorization: Bearer <access_token>` header, using the token returned by `/api/auth/login`. Set `ENABLE_API_DOCS=true` to browse them at `/api/docs`.
 
-| Method | Endpoint                        | Description                              |
-| ------ | ------------------------------- | ---------------------------------------- |
-| GET    | `/`                             | Serves React Single Page Application     |
-| GET    | `/health`                       | Health & readiness check                 |
-| POST   | `/auth/signup`                  | Register a new account                   |
-| POST   | `/auth/login`                   | Authenticate and obtain JWT token        |
-| POST   | `/docs/upload`                  | Upload document or scanned image         |
-| GET    | `/docs/documents`               | Retrieve user documents & metadata       |
-| GET    | `/docs/documents/{id}/graph`    | Document entity co-occurrence graph      |
-| GET    | `/docs/graph/global`            | Multi-document cross-entity graph        |
-| POST   | `/docs/documents/{id}/chat`     | RAG question-answering with citations    |
+| Method | Endpoint                          | Description                                 |
+| ------ | --------------------------------- | ------------------------------------------- |
+| GET    | `/`                               | Serves the React single-page app            |
+| GET    | `/api/health`                     | Liveness check                              |
+| GET    | `/api/health/ready`               | Readiness: database, Redis, storage         |
+| POST   | `/api/auth/signup`                | Register a new account                      |
+| POST   | `/api/auth/login`                 | Authenticate and obtain a JWT               |
+| POST   | `/api/documents`                  | Upload a document or scanned image          |
+| GET    | `/api/documents`                  | List your documents                         |
+| GET    | `/api/documents/{id}/entities`    | Named entities in a document                |
+| GET    | `/api/documents/{id}/graph`       | Document entity co-occurrence graph         |
+| POST   | `/api/documents/{id}/chat`        | RAG question answering with citations       |
+| GET    | `/api/graph`                      | Cross-document entity graph                 |
