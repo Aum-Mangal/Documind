@@ -1,9 +1,8 @@
 import React, { useEffect, useState } from 'react'
 import { api } from '../api'
 
-// On free hosting the API sleeps when nobody has used it for a while, and the first request
-// wakes it, which can take a minute. Instead of letting that look like a failure, say so and
-// keep checking until it answers.
+// The API can take a minute to come up (first start, or Docker still starting). Instead of
+// letting that look like a failure, say so and keep checking until it answers.
 const SLOW_AFTER_MS = 2000
 const RETRY_EVERY_MS = 3000
 
@@ -32,7 +31,7 @@ export default function ServerStatus() {
   return (
     <div role="status" className="border-b border-line bg-accent-soft px-4 py-2 text-center text-sm text-ink">
       <span className="spinner w-3.5 h-3.5 mr-2 align-[-2px]" />
-      Starting the server. It sleeps when it hasn’t been used for a while; this can take up to a minute.
+      Waiting for the server. If you just started DocuMind this can take a minute; otherwise check that Docker is running.
     </div>
   )
 }

@@ -1,10 +1,11 @@
-# Local development stack: Postgres + pgvector, Redis, S3-compatible storage, and the API.
+# DocuMind on your computer: Postgres + pgvector, Redis, S3-compatible storage, and the app.
 #
-#   docker compose up --build          # everything, app on http://localhost:8000
+#   docker compose up --build          # everything; open http://localhost:8000
 #   docker compose up db redis s3      # only the services, when running the API with uvicorn
 #
-# Secrets (SECRET_KEY, GROQ_API_KEY) are read from backend/.env. The service URLs
-# below override whatever backend/.env says, so the container never talks to a remote database.
+# Optional settings (GROQ_API_KEY for AI answers, limits, ...) are read from backend/.env.
+# A SECRET_KEY is generated on first start if none is set. The service URLs below override
+# whatever backend/.env says, so the app always uses these local services.
 
 services:
   db:
@@ -64,6 +65,8 @@ services:
       SIGNUP_PER_HOUR: "100"
     ports:
       - "8000:10000"
+    volumes:
+      - appstate:/app/state
     depends_on:
       db:
         condition: service_healthy
@@ -73,6 +76,7 @@ services:
         condition: service_started
 
 volumes:
+  appstate:
   pgdata:
   redisdata:
   s3data:

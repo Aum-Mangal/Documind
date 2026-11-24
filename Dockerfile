@@ -26,8 +26,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     tesseract-ocr-eng \
     && rm -rf /var/lib/apt/lists/*
 
-# Run as an unprivileged user (uid 1000 is also what Hugging Face Spaces expects)
-RUN useradd --create-home --uid 1000 app
+# Run as an unprivileged user; /app/state holds the generated secret key (a volume in compose)
+RUN useradd --create-home --uid 1000 app && mkdir -p /app/state && chown app:app /app/state
 
 WORKDIR /app/backend
 
@@ -47,5 +47,5 @@ EXPOSE 10000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=90s --retries=3 \
     CMD python -c "import os, urllib.request; urllib.request.urlopen(f'http://127.0.0.1:{os.environ.get(\"PORT\", \"10000\")}/api/health', timeout=4)"
 
-# Apply database migrations, then start the API
-CMD ["sh", "-c", "alembic upgrade head && exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-10000} --proxy-headers --forwarded-allow-ips='*'"]
+# Make sure there is a secret key, apply database migrations, then start the API
+CMD ["sh", "/app/backend/scripts/start.sh"]

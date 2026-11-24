@@ -1,36 +1,72 @@
 # DocuMind
 
-DocuMind is an AI-powered document intelligence platform that allows users to upload documents, generate concise summaries, extract important information, and ask questions about the document using natural language.
+DocuMind is a document intelligence app you run on your own computer: upload PDFs, Word files, text files or scanned images, read short AI summaries, explore the people, organisations and places they mention as a knowledge graph, and ask questions answered from the documents themselves, with citations to the exact page.
 
-The project was built to explore how modern AI applications combine large language models, vector search, and traditional backend development into a single system.
+Everything runs locally in Docker: your documents and the database stay on your machine. The only outside service is the Groq API, which writes the answers and summaries (free key, optional).
+
+## Quick start
+
+You need **Docker Desktop** ([Windows / macOS](https://www.docker.com/products/docker-desktop/)) or Docker Engine on Linux, running.
+
+1. **Get the code**: `git clone https://github.com/Aum-Mangal/Documind.git` then `cd Documind`, or download the ZIP from GitHub (*Code → Download ZIP*) and unzip it.
+
+2. **Add your AI key** (optional but recommended): get a free key at [console.groq.com/keys](https://console.groq.com/keys), then copy the settings template:
+
+   ```bash
+   cp backend/.env.example backend/.env
+   ```
+
+   (Windows PowerShell: `copy backend\.env.example backend\.env`.) Open `backend/.env` and set `GROQ_API_KEY=your-key`. Leave everything else as it is.
+
+3. **Start it.** The first build downloads the models and takes about 5–10 minutes; later starts take seconds.
+
+   ```bash
+   docker compose up --build
+   ```
+
+4. Open **http://localhost:8000**, create an account and upload a document.
+
+| To... | Run |
+|---|---|
+| Stop it (your documents are kept) | `docker compose down` |
+| Start it again | `docker compose up` |
+| Update after pulling new code | `docker compose up --build` |
+| Delete everything, including all documents and accounts | `docker compose down -v` |
+
+Without a Groq key everything except the AI-written parts works: uploads, search, entities and the knowledge graph. Summaries are skipped, and questions return a message saying AI isn't configured.
+
+**Troubleshooting**
+- *"Waiting for the server" banner*: the app is still starting (watch the terminal), or Docker isn't running.
+- *Port already in use*: something else uses port 8000, 5432, 6379 or 8333. Stop it, or change the left-hand port numbers in `docker-compose.yml`.
+- *"I couldn't find that in your documents"*: open the document (or choose it on the Ask page) and ask there; questions across the whole library only use the passages that match best.
 
 ## Features
 
 * **Knowledge graph**: built once at ingestion and stored in Postgres. spaCy finds people, organisations, places and products (dates and numbers are left out); names are normalised and aliases merged within and across documents ("Ms Okafor" → "Maria Okafor", "Northwind" → "Northwind Supply"); the LLM corrects entity types and extracts typed relations ("Halden & Rowe —appointed→ Maria Okafor") from the most entity-dense passages, restricted to the names found so it cannot invent nodes. Shown with Cytoscape.js as labelled arrows plus co-occurrence links
-* **OCR Support**: Automatic PyMuPDF extraction with Tesseract OCR engine fallback for scanned documents and image files (`.pdf`, `.png`, `.jpg`, `.jpeg`, `.webp`, `.docx`, `.txt`)
+* **OCR**: PyMuPDF text extraction with Tesseract OCR for scanned pages and images (`.pdf`, `.png`, `.jpg`, `.jpeg`, `.webp`, `.docx`, `.txt`)
 * **Background ingestion**: uploads return immediately; a crash-safe Postgres job queue (`FOR UPDATE SKIP LOCKED`, retries with backoff, stale-job recovery) extracts text page by page, OCRs only scanned pages, and embeds sentence-aware chunks into pgvector, with live progress over server-sent events
 * **Hybrid retrieval**: pgvector HNSW similarity and Postgres full-text search fused with Reciprocal Rank Fusion in a single SQL query, then reranked by a cross-encoder
-* **Grounded chat**: answers cite the document and page of each passage, decline when nothing relevant is found, and treat document text as untrusted data; conversations are saved, can span all documents or a chosen few, and follow-up questions are rewritten into standalone searches
-* **Limits and caching**: Redis-backed rate limits on sign-in, sign-up, chat and uploads; per-user daily AI token and storage quotas; cached query embeddings and answers (invalidated automatically when documents change); logout revokes the token. Without Redis everything falls back to in-memory, and a Redis outage fails open rather than locking users out
-* **Modern React Frontend**: Clean, dark-themed UI built with React 18, Vite, Tailwind CSS, and Lucide icons
-* **PostgreSQL + pgvector**: Versioned schema with Alembic migrations, async access with SQLAlchemy 2.0 + asyncpg
-* **User Authentication**: JWT bearer tokens, bcrypt password hashing
+* **Grounded chat**: answers cite the document and page of each passage and treat document text as untrusted data; short chosen documents are read whole, so "summarise this" works; the model may rate or critique a document when asked, citing what it bases that on; conversations are saved, can span all documents or a chosen few, and follow-up questions are rewritten into standalone searches
+* **Limits and caching**: Redis-backed rate limits on sign-in, sign-up, chat and uploads; per-user daily AI token and storage quotas; cached query embeddings and answers (invalidated automatically when documents change); logout revokes the token
+* **Frontend**: React 18, Vite and Tailwind CSS with a warm paper palette, Lucide icons
+* **PostgreSQL + pgvector**: versioned schema with Alembic migrations, async access with SQLAlchemy 2.0 + asyncpg
+* **Accounts**: JWT bearer tokens and bcrypt password hashing; several people can share one installation, each seeing only their own documents
 
 ## Tech Stack
 
 ### Frontend
 * **React 18** (Vite build system)
-* **Tailwind CSS** (Dark mode styling)
-* **Cytoscape.js** (Interactive graph visualization)
-* **Lucide React** (Modern iconography)
+* **Tailwind CSS**
+* **Cytoscape.js** (interactive graph visualization)
+* **Lucide React** (icons)
 
 ### Backend
 * **Python 3.13** / **FastAPI**
 * **PostgreSQL 17 + pgvector**, **SQLAlchemy 2.0 (async)**, **Alembic**
 * **Redis** (caching and rate limiting)
-* **S3-compatible object storage** (SeaweedFS locally, Cloudflare R2 in production)
+* **S3-compatible object storage** for uploaded files (SeaweedFS in Docker)
 * **Tesseract OCR** & **PyMuPDF (fitz)**
-* **FastEmbed ONNX** (`BAAI/bge-small-en-v1.5` embeddings, `ms-marco-MiniLM-L-6-v2` reranker, CPU-only)
+* **FastEmbed ONNX** (`BAAI/bge-small-en-v1.5` embeddings, `ms-marco-MiniLM-L-6-v2` reranker, CPU-only, built into the image)
 * **Groq API** (model set by `GROQ_MODEL`, default `openai/gpt-oss-20b`)
 * **spaCy** (`en_core_web_sm` NER)
 
@@ -41,18 +77,16 @@ The project was built to explore how modern AI applications combine large langua
                              |
                      REST / JSON  (/api/*)
                              |
-                      FastAPI Backend
+                      FastAPI Backend  --  ingestion worker (Postgres job queue)
        ______________________|_______________________________
       |              |               |            |          |
   PyMuPDF &       spaCy NER       FastEmbed   PostgreSQL   Redis    S3 storage
-  Tesseract    Entity Extraction    (ONNX)    + pgvector   (cache)  (files)
+  Tesseract    + LLM relations   + reranker   + pgvector   (cache)  (files)
      OCR             |               |
-      |       Knowledge Graph     Cosine
- Document      Co-occurrence    Similarity
- Parsing          Matrix        Search
+      |       Knowledge graph   Hybrid search
       |______________________________|
                      |
-         Groq LLM (RAG with Citations)
+         Groq LLM (answers with citations)
 ```
 
 ## Project Layout
@@ -60,62 +94,33 @@ The project was built to explore how modern AI applications combine large langua
 ```text
 backend/
   app/
-    core/       config (env settings), security (passwords, JWT)
-    db/         SQLAlchemy models and async session
-    api/        routes: auth, documents, health
-    services/   extraction, OCR, NER, graph, RAG, LLM, storage, cache
-    main.py     FastAPI app
-  alembic/      database migrations
-  eval/       retrieval evaluation: corpus, labelled questions, runner, results
-docker-compose.yml   Postgres + pgvector, Redis, SeaweedFS (S3), API
-deploy/, docs/       Hugging Face Space template and deployment guide
+    core/        config (env settings), security, logging, rate limits
+    db/          SQLAlchemy models and async session
+    api/         routes: auth, documents, chat, health
+    ingestion/   job queue worker, pipeline, chunking, progress events
+    retrieval/   hybrid search, reranking, answers, caches
+    knowledge/   entities, LLM relations, graph storage and queries
+    services/    extraction, OCR, embeddings, LLM, storage, quotas
+    main.py      FastAPI app
+  alembic/       database migrations
+  eval/          retrieval evaluation: corpus, labelled questions, runner, results
+  tests/         unit tests; tests/integration needs a Postgres database
+frontend/        React app
+docker-compose.yml   Postgres + pgvector, Redis, SeaweedFS (S3), the app
 scripts/             smoke test and k6 load test
 ```
 
-## Deployment
+## Performance
 
-DocuMind runs for free on Hugging Face Spaces (API and worker), Neon (Postgres + pgvector), Upstash (Redis), Cloudflare R2 (files and backups) and GitHub Pages (frontend), deployed by GitHub Actions after CI passes. The image builds the frontend and includes the embedding and reranker models, so a restarted server answers its first question without downloading anything. Step-by-step setup: [docs/deployment.md](docs/deployment.md).
-
-- Works through Neon's PgBouncer pooler (tested against PgBouncer in transaction mode), with migrations on the direct connection and an optional pool-free mode so the database can scale to zero
-- Request IDs on every log line (`X-Request-ID`), JSON logs, optional Sentry
-- Nightly `pg_dump` to R2 with 14-day retention and a monthly automated restore test
-- A "starting the server" notice while a sleeping Space wakes up
-
-### Load test
-
-`scripts/loadtest.js` (k6) with 10 concurrent users for 2 minutes against the local Docker stack on a laptop CPU, with no LLM calls: 0% errors; listing documents and conversations p95 180 ms; a cached answer p95 192 ms; a full search (query embedding, hybrid search and reranking) median 216 ms, p95 1.23 s.
+`scripts/loadtest.js` (k6) with 10 concurrent users for 2 minutes against the Docker stack on a laptop CPU, with no LLM calls: 0% errors; listing documents and conversations p95 180 ms; a cached answer p95 192 ms; a full search (query embedding, hybrid search and reranking) median 216 ms, p95 1.23 s.
 
 ```bash
 docker run --rm -i -e BASE=http://host.docker.internal:8000 grafana/k6:1.8.2 run - < scripts/loadtest.js
 ```
 
-## Running Locally
+## Development
 
-You need [Docker](https://www.docker.com/products/docker-desktop/) and, for frontend work, Node.js.
-
-### 1. Clone and configure
-
-```bash
-git clone https://github.com/Aum-Mangal/Documind.git
-cd Documind
-cp backend/.env.example backend/.env
-```
-
-Edit `backend/.env` and set `SECRET_KEY` (at least 32 random characters) and `GROQ_API_KEY`:
-
-```bash
-python -c "import secrets; print(secrets.token_urlsafe(48))"
-```
-
-### 2a. Run everything in Docker
-
-```bash
-docker compose up --build
-```
-
-Open `http://localhost:8000`. Migrations run automatically when the API container starts.
-
-### 2b. Or run the API on your machine (with hot reload)
+### Run the API outside Docker (with hot reload)
 
 Start only the services, then the API:
 
@@ -129,13 +134,13 @@ alembic upgrade head
 uvicorn app.main:app --reload
 ```
 
-Make sure `DATABASE_URL` in `backend/.env` points at the local database (`postgresql://documind:documind@localhost:5432/documind`) and not at a hosted one.
+Outside Docker, `backend/.env` needs a `SECRET_KEY` (see the comment there) and `DATABASE_URL=postgresql://documind:documind@localhost:5432/documind`.
 
 For frontend hot-reloading: `cd frontend && npm install && npm run dev` (proxies `/api` to port 8000). To have uvicorn serve the UI itself instead, build it once with `npm run build` (the Docker image does this automatically).
 
 ### Configuration
 
-All settings come from environment variables or `backend/.env`; see [`backend/.env.example`](backend/.env.example) for the full list. The app refuses to start without a valid `SECRET_KEY` and a PostgreSQL `DATABASE_URL`.
+All settings come from environment variables or `backend/.env`; see [`backend/.env.example`](backend/.env.example) for the full list, including rate limits and quotas.
 
 ### Database migrations
 
