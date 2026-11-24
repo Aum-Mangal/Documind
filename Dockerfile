@@ -31,8 +31,18 @@ RUN useradd --create-home --uid 1000 app && mkdir -p /app/state && chown app:app
 
 WORKDIR /app/backend
 
+# The spaCy English model is only published as a GitHub release file. Docker fetches it here
+# itself (more reliable than pip downloading it inside the build container on some networks),
+# pinned to its checksum; pip then installs the local copy and everything else from PyPI.
+ADD --checksum=sha256:1932429db727d4bff3deed6b34cfc05df17794f4a52eeb26cf8928f7c1a0fb85 \
+    https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl \
+    /tmp/wheels/en_core_web_sm-3.8.0-py3-none-any.whl
+
 COPY backend/requirements.txt ./requirements.txt
-RUN pip install --upgrade pip && pip install -r requirements.txt
+RUN pip install --upgrade pip \
+    && grep -v "en_core_web_sm" requirements.txt > /tmp/requirements-pypi.txt \
+    && pip install --retries 10 --timeout 60 -r /tmp/requirements-pypi.txt /tmp/wheels/en_core_web_sm-3.8.0-py3-none-any.whl \
+    && rm -rf /tmp/wheels /tmp/requirements-pypi.txt
 
 # Fetch the embedding and reranker models into the image (a layer that rarely changes)
 COPY backend/scripts/download_models.py /tmp/download_models.py
